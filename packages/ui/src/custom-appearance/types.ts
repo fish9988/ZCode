@@ -1,4 +1,5 @@
 export type CustomBaseMode = "light" | "dark";
+export type ThemeDesignLanguage = "default" | "claude" | "m3" | "fluent" | "liquid-glass";
 
 export interface CustomThemeColorOverrides {
   background: string;
@@ -54,6 +55,7 @@ export interface CustomCssConfig {
 export interface CustomAppearanceConfig {
   version: 1;
   activePresetId: string;
+  designLanguage: ThemeDesignLanguage;
   enableCustomColors: boolean;
   lightColors: CustomThemeColorOverrides;
   darkColors: CustomThemeColorOverrides;
@@ -66,7 +68,9 @@ export interface CustomAppearanceConfig {
 export interface AppearancePreset {
   id: string;
   name: string;
+  badge: string;
   description: string;
+  designLanguage: ThemeDesignLanguage;
   recommendedMode: CustomBaseMode;
   patch: {
     enableCustomColors: boolean;

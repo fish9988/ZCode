@@ -9,6 +9,7 @@ import type {
   CustomAppearanceConfig,
   CustomBaseMode,
   CustomThemeColorOverrides,
+  ThemeDesignLanguage,
 } from "./types.js";
 
 const STORAGE_KEY = "zcode-custom-appearance-v1";
@@ -72,9 +73,18 @@ export function normalizeCustomAppearanceConfig(raw: unknown): CustomAppearanceC
           )
         : def.layout.chatMaxWidthPx;
 
+  const designLanguage: ThemeDesignLanguage =
+    raw.designLanguage === "claude" ||
+    raw.designLanguage === "m3" ||
+    raw.designLanguage === "fluent" ||
+    raw.designLanguage === "liquid-glass"
+      ? raw.designLanguage
+      : "default";
+
   return {
     version: 1,
     activePresetId: readString(raw.activePresetId, def.activePresetId),
+    designLanguage,
     enableCustomColors: readBoolean(raw.enableCustomColors, def.enableCustomColors),
     lightColors: normalizeColors(raw.lightColors, DEFAULT_LIGHT_COLORS),
     darkColors: normalizeColors(raw.darkColors, DEFAULT_DARK_COLORS),
@@ -198,6 +208,7 @@ export const useCustomAppearanceStore = create<CustomAppearanceState>((set, get)
     get().updateConfig((prev) => ({
       ...prev,
       activePresetId: preset.id,
+      designLanguage: preset.designLanguage,
       enableCustomColors: preset.patch.enableCustomColors,
       lightColors: preset.patch.lightColors
         ? { ...prev.lightColors, ...preset.patch.lightColors }

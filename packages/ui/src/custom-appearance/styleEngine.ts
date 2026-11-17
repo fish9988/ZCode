@@ -81,6 +81,34 @@ function buildAppearanceCss(config: CustomAppearanceConfig, resolvedMode: Custom
     blocks.push(`:root:root, :root.theme-zai-light, :root.theme-zai-dark {\n  ${colorVars.join("\n  ")}\n}`);
   }
 
+  if (config.enableCustomColors && config.designLanguage !== "default") {
+    if (config.designLanguage === "claude") {
+      blocks.push(
+        `[data-zcode-design-language="claude"] .chat-composer-input-surface {\n  border-radius: 18px;\n  border: 1px solid var(--color-border);\n  box-shadow: ${
+          resolvedMode === "dark"
+            ? "0 4px 16px rgb(0 0 0 / 28%), 0 1px 3px rgb(0 0 0 / 14%)"
+            : "0 4px 18px rgb(20 20 19 / 8%), 0 1px 3px rgb(20 20 19 / 4%)"
+        };\n}\n[data-zcode-design-language="claude"] [data-v4-user-input-bubble="true"] {\n  border-radius: 14px;\n}\n[data-zcode-design-language="claude"] [data-streamdown="code-block"] {\n  border-radius: 12px;\n}`,
+      );
+    } else if (config.designLanguage === "m3") {
+      blocks.push(
+        `[data-zcode-design-language="m3"] .chat-composer-input-surface {\n  border-radius: 24px;\n  box-shadow: 0 2px 12px color-mix(in srgb, var(--color-brand) 8%, transparent);\n}\n[data-zcode-design-language="m3"] [data-v4-user-input-bubble="true"] {\n  border-radius: 20px;\n  border-color: transparent;\n}\n[data-zcode-design-language="m3"] [data-streamdown="code-block"] {\n  border-radius: 16px;\n}`,
+      );
+    } else if (config.designLanguage === "fluent") {
+      blocks.push(
+        `[data-zcode-design-language="fluent"] .chat-composer-input-surface {\n  border-radius: 10px;\n  border: 1px solid var(--color-border);\n  box-shadow: 0 2px 6px rgb(0 0 0 / 6%);\n}\n[data-zcode-design-language="fluent"] .chat-composer-input-surface:focus-within {\n  border-bottom: 2px solid var(--color-brand);\n}\n[data-zcode-design-language="fluent"] [data-v4-user-input-bubble="true"] {\n  border-radius: 8px;\n}`,
+      );
+    } else if (config.designLanguage === "liquid-glass") {
+      blocks.push(
+        `[data-zcode-design-language="liquid-glass"] .chat-composer-input-surface {\n  border-radius: 20px;\n  backdrop-filter: blur(18px) saturate(160%);\n  border: 1px solid color-mix(in srgb, var(--color-foreground) 12%, transparent);\n  box-shadow: inset 0 1px 0 ${
+          resolvedMode === "dark" ? "rgb(255 255 255 / 12%)" : "rgb(255 255 255 / 70%)"
+        }, 0 8px 24px rgb(0 0 0 / ${resolvedMode === "dark" ? "26%" : "8%"});\n}\n[data-zcode-design-language="liquid-glass"] [data-v4-user-input-bubble="true"] {\n  border-radius: 18px;\n  backdrop-filter: blur(14px) saturate(140%);\n  box-shadow: inset 0 1px 0 ${
+          resolvedMode === "dark" ? "rgb(255 255 255 / 10%)" : "rgb(255 255 255 / 65%)"
+        };\n}`,
+      );
+    }
+  }
+
   if (config.fonts.enabled) {
     const uiHasCustom =
       config.fonts.ui.westernFamily.trim() !== "" || config.fonts.ui.cjkFamily.trim() !== "";
@@ -248,6 +276,7 @@ export function applyCustomAppearanceToDocument(
   } else {
     root.removeAttribute("data-zcode-custom-width");
   }
+  root.setAttribute("data-zcode-design-language", config.designLanguage);
 
   syncWallpaperLayer(config, resolvedMode);
 

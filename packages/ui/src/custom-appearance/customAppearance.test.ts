@@ -1,7 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it, beforeEach } from "vitest";
 import { buildCssFontStack } from "./fontLoader.js";
-import { DEFAULT_CUSTOM_APPEARANCE_CONFIG } from "./presets.js";
+import {
+  BUILTIN_APPEARANCE_PRESETS,
+  DEFAULT_CUSTOM_APPEARANCE_CONFIG,
+} from "./presets.js";
 import {
   CHAT_WIDTH_MAX_PX,
   CHAT_WIDTH_MIN_PX,
@@ -86,5 +89,29 @@ describe("custom-appearance", () => {
     // 开启安全模式后立即清空用户 CSS，但保留配置本身
     applyCustomAppearanceToDocument(cfg, "light", true);
     expect(document.getElementById("zcode-custom-css")?.textContent).toBe("");
+  });
+
+  it("includes Claude Code Desktop, Google M3, Microsoft Fluent 2, and Apple Liquid Glass dual-mode presets", () => {
+    const ids = BUILTIN_APPEARANCE_PRESETS.map((p) => p.id);
+    expect(ids).toContain("claude-code-desktop");
+    expect(ids).toContain("google-m3-expressive");
+    expect(ids).toContain("microsoft-fluent-2");
+    expect(ids).toContain("apple-liquid-glass");
+
+    for (const preset of BUILTIN_APPEARANCE_PRESETS) {
+      expect(preset.patch.lightColors).toBeDefined();
+      expect(preset.patch.darkColors).toBeDefined();
+    }
+
+    const claudeCfg = normalizeCustomAppearanceConfig({
+      activePresetId: "claude-code-desktop",
+      designLanguage: "claude",
+      enableCustomColors: true,
+      lightColors: BUILTIN_APPEARANCE_PRESETS.find((p) => p.id === "claude-code-desktop")!.patch.lightColors,
+      darkColors: BUILTIN_APPEARANCE_PRESETS.find((p) => p.id === "claude-code-desktop")!.patch.darkColors,
+    });
+    applyCustomAppearanceToDocument(claudeCfg, "dark", false);
+    expect(document.documentElement.getAttribute("data-zcode-design-language")).toBe("claude");
+    expect(document.getElementById("zcode-custom-appearance-vars")?.textContent).toContain("#d97757");
   });
 });

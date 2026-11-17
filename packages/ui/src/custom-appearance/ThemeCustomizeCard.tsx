@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Download, RotateCcw, Upload } from "lucide-react";
+import { Download, Moon, RotateCcw, Sun, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { Card, CardContent } from "@/components/ui/card.js";
 import { Input } from "@/components/ui/input.js";
@@ -108,6 +108,34 @@ export function ThemeCustomizeCard({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-border bg-surface p-0.5">
+            <Button
+              type="button"
+              variant={resolvedMode === "light" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-2.5"
+              onClick={() => {
+                setTheme("zai-light");
+                setEditingMode("light");
+              }}
+            >
+              <Sun className="mr-1 size-3.5" />
+              浅色
+            </Button>
+            <Button
+              type="button"
+              variant={resolvedMode === "dark" ? "default" : "ghost"}
+              size="sm"
+              className="h-7 px-2.5"
+              onClick={() => {
+                setTheme("zai-dark");
+                setEditingMode("dark");
+              }}
+            >
+              <Moon className="mr-1 size-3.5" />
+              深色
+            </Button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -146,16 +174,23 @@ export function ThemeCustomizeCard({
       <div className="grid gap-2.5 sm:grid-cols-2">
         {BUILTIN_APPEARANCE_PRESETS.map((preset) => {
           const active = config.activePresetId === preset.id;
+          const previewPalette =
+            resolvedMode === "dark"
+              ? (preset.patch.darkColors ?? config.darkColors)
+              : (preset.patch.lightColors ?? config.lightColors);
+          const swatches = [
+            previewPalette.background,
+            previewPalette.sidebar,
+            previewPalette.userBubble,
+            previewPalette.brand,
+          ];
           return (
             <button
               key={preset.id}
               type="button"
               onClick={() => {
-                const mode = applyPreset(preset.id);
-                if (mode) {
-                  setEditingMode(mode);
-                  setTheme(mode === "dark" ? "zai-dark" : "zai-light");
-                }
+                applyPreset(preset.id);
+                setEditingMode(resolvedMode);
               }}
               className={`rounded-xl border p-3 text-left transition-colors ${
                 active
@@ -164,12 +199,25 @@ export function ThemeCustomizeCard({
               }`}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-ui-base font-semibold text-foreground">{preset.name}</span>
-                <span className="rounded bg-surface px-1.5 py-0.5 text-ui-xs text-foreground-subtle">
-                  {preset.recommendedMode === "dark" ? "深色" : "浅色"}
-                </span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-ui-base font-semibold text-foreground">
+                    {preset.name}
+                  </span>
+                  <span className="shrink-0 rounded bg-surface px-1.5 py-0.5 text-ui-xs text-foreground-subtle">
+                    {preset.badge}
+                  </span>
+                </div>
+                <div className="flex shrink-0 items-center gap-1" aria-hidden="true">
+                  {swatches.map((hex, idx) => (
+                    <span
+                      key={`${preset.id}-${idx}`}
+                      className="size-3 rounded-full border border-black/15 dark:border-white/20"
+                      style={{ backgroundColor: hex }}
+                    />
+                  ))}
+                </div>
               </div>
-              <p className="mt-1 text-ui-sm leading-5 text-foreground-subtle">
+              <p className="mt-1.5 text-ui-sm leading-5 text-foreground-subtle">
                 {preset.description}
               </p>
             </button>
