@@ -146,7 +146,7 @@ function buildAppearanceCss(config: CustomAppearanceConfig, resolvedMode: Custom
   if (config.layout.chatMaxWidthPx !== null) {
     const px = config.layout.chatMaxWidthPx;
     blocks.push(
-      `:root:root {\n  --zcode-chat-max-width: ${px}px;\n}\n[data-v4-timeline-content-column="true"],\n[data-v4-composer-dock-content="true"] {\n  max-width: min(100%, var(--zcode-chat-max-width)) !important;\n  width: 100% !important;\n}`,
+      `:root:root {\n  --zcode-chat-max-width: ${px}px;\n}\n[data-v4-timeline-content-column="true"],\n[data-v4-composer-dock-content="true"],\n[data-zcode-resize-frame="true"] {\n  max-width: min(calc(100% - 2rem), var(--zcode-chat-max-width)) !important;\n  width: 100% !important;\n}\n@container conversation (width >= 1280px) {\n  [data-v4-timeline-content-column="true"][class*="-translate-x-42"],\n  [data-v4-composer-dock-content="true"][class*="-translate-x-42"],\n  [data-zcode-resize-frame="true"][class*="-translate-x-42"] {\n    max-width: min(calc(100% - 24rem), var(--zcode-chat-max-width)) !important;\n  }\n}`,
     );
   }
 

@@ -78,6 +78,7 @@ describe("custom-appearance", () => {
     expect(varsStyle?.textContent).toContain('Inter, "Sarasa UI SC"');
     expect(varsStyle?.textContent).toContain('Georgia, "LXGW WenKai"');
     expect(varsStyle?.textContent).toContain("--zcode-chat-max-width: 1020px;");
+    expect(varsStyle?.textContent).toContain("calc(100% - 24rem)");
     expect(document.documentElement.getAttribute("data-zcode-wide-code")).toBe("true");
     expect(document.documentElement.getAttribute("data-zcode-compact-process")).toBe("true");
     expect(cssStyle?.textContent).toContain("opacity: 0.99");

@@ -2000,6 +2000,7 @@ function ConversationTimelineImpl({
       {!compactForRemoteControl && !floatingComposerDock && !centeredEmptyLayout ? (
         <div className="pointer-events-none absolute inset-0 z-30 flex justify-center">
           <div
+            data-zcode-resize-frame="true"
             className={cn(
               "relative h-full w-full",
               contentWidthClassName,
