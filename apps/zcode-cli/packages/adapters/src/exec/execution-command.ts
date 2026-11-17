@@ -153,6 +153,16 @@ function createShellProviderCommand(
     };
   }
 
+  if (provider.dialect === "powershell") {
+    return {
+      args: createPowerShellEncodedCommandArgs(command),
+      cwdDialect: provider.dialect,
+      envOverlay: provider.envOverlay,
+      file: provider.file,
+      shell: false,
+    };
+  }
+
   return {
     args: ["-c", "-l", command],
     cwdDialect: provider.dialect,
@@ -186,6 +196,14 @@ export function applyResolvedShellCommand(
       ...resolved,
       args: [],
       file: command,
+    };
+  }
+
+  if (resolved.cwdDialect === "powershell") {
+    return {
+      ...resolved,
+      args: createPowerShellEncodedCommandArgs(command),
+      shell: false,
     };
   }
 
@@ -242,6 +260,16 @@ function isWindowsCommandShim(file: string): boolean {
 function createCmdShimArgs(file: string, args: string[]): string[] {
   const commandLine = [file, ...args].map(quoteCmdArgument).join(" ");
   return ["/d", "/s", "/c", commandLine];
+}
+
+function createPowerShellEncodedCommandArgs(command: string): string[] {
+  const script = [
+    "[Console]::InputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    "$OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+    command,
+  ].join("\n");
+  const encoded = Buffer.from(script, "utf16le").toString("base64");
+  return ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded];
 }
 
 function quoteCmdArgument(value: string): string {

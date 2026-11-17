@@ -3591,7 +3591,12 @@ function integratedTerminalShellToExecutionSelection(
   }
   return {
     display: {
-      name: selection.dialect === "git-bash" ? "Git Bash" : "CMD",
+      name:
+        selection.dialect === "git-bash"
+          ? "Git Bash"
+          : selection.dialect === "powershell"
+            ? selection.label || "PowerShell"
+            : "CMD",
     },
     dialect: selection.dialect,
     id: selection.id,

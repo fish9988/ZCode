@@ -63,7 +63,7 @@ export const integratedTerminalShellSelectionSchema = z.discriminatedUnion("mode
   }),
   z.object({
     mode: z.literal("shell"),
-    dialect: z.enum(["cmd", "git-bash"]),
+    dialect: z.enum(["cmd", "git-bash", "powershell"]),
     id: nonEmptyStringSchema,
     label: nonEmptyStringSchema,
     path: nonEmptyStringSchema,

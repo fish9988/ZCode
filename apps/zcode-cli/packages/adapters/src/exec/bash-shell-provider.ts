@@ -150,6 +150,9 @@ function createShellProviderFromSelection(
   if (selection.dialect === "cmd") {
     return createWindowsCmdProvider(selection.path);
   }
+  if (selection.dialect === "powershell") {
+    return createPowerShellProvider(selection.path);
+  }
   if (selection.dialect === "posix") {
     return createPosixShellProvider(selection.path);
   }
@@ -177,6 +180,22 @@ function resolveEffectiveWindowsBashShellSelection(
           source: "user-config",
         }),
       };
+    }
+    if (override.dialect === "powershell") {
+      const psPath = resolveWindowsPowerShellOverridePath(override.path ?? "pwsh.exe", options.exists);
+      if (psPath) {
+        return {
+          provider: createPowerShellProvider(psPath),
+          selection: shellSelection({
+            dialect: "powershell",
+            displayName: override.label || "PowerShell",
+            id: override.id,
+            label: override.label,
+            path: psPath,
+            source: "user-config",
+          }),
+        };
+      }
     }
     if (override.dialect === "cmd") {
       const cmdPath = resolveWindowsCmdOverridePath(override.path ?? "cmd.exe", options.exists);
@@ -277,6 +296,28 @@ function createWindowsCmdProvider(shellPath: string): BashShellProvider {
     file: shellPath,
     shell: shellPath,
   };
+}
+
+function createPowerShellProvider(shellPath: string): BashShellProvider {
+  return {
+    dialect: "powershell",
+    file: shellPath,
+    shell: false,
+  };
+}
+
+function resolveWindowsPowerShellOverridePath(
+  shellPath: string,
+  exists?: ExecutableCheck,
+): string | undefined {
+  if (isExecutableCandidate(shellPath, exists)) {
+    return shellPath;
+  }
+  const lower = shellPath.toLowerCase();
+  if (!shellPath.includes("\\") && !shellPath.includes("/") && (lower === "pwsh.exe" || lower === "powershell.exe")) {
+    return shellPath;
+  }
+  return undefined;
 }
 
 function resolveWindowsCmdOverridePath(

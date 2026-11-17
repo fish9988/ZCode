@@ -34,10 +34,12 @@ export function createCwdCapturePlan(
   const wrappedCommand =
     options.dialect === "cmd"
       ? createWindowsCmdCwdCaptureCommand(request.command.command, cwdFilePath)
-      : createPosixCwdCaptureCommand(
-          request.command.command,
-          options.dialect === "git-bash" ? windowsPathToGitBashPath(cwdFilePath) : cwdFilePath,
-        );
+      : options.dialect === "powershell"
+        ? createPowerShellCwdCaptureCommand(request.command.command, cwdFilePath)
+        : createPosixCwdCaptureCommand(
+            request.command.command,
+            options.dialect === "git-bash" ? windowsPathToGitBashPath(cwdFilePath) : cwdFilePath,
+          );
 
   return {
     command: {
@@ -64,6 +66,28 @@ function createWindowsCmdCwdCaptureCommand(command: string, cwdFilePath: string)
     `if "%__zcode_status%"=="0" cd > ${cmdQuote(cwdFilePath)}`,
     "exit /b %__zcode_status%",
   ].join("\r\n");
+}
+
+function createPowerShellCwdCaptureCommand(command: string, cwdFilePath: string): string {
+  const escapedPath = cwdFilePath.replaceAll("'", "''");
+  return [
+    "$global:LASTEXITCODE = 0",
+    "$__zcode_user_ok = $true",
+    "try {",
+    command,
+    "  $__zcode_user_ok = $?",
+    "} catch {",
+    "  [Console]::Error.WriteLine($_.ToString())",
+    "  $__zcode_user_ok = $false",
+    "  if ($LASTEXITCODE -eq 0) { $global:LASTEXITCODE = 1 }",
+    "} finally {",
+    "  $__zcode_exit = if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { [int]$LASTEXITCODE } elseif ($__zcode_user_ok) { 0 } else { 1 }",
+    "  if ($__zcode_exit -eq 0) {",
+    `    [System.IO.File]::WriteAllText('${escapedPath}', (Get-Location).Path, [System.Text.UTF8Encoding]::new($false))`,
+    "  }",
+    "}",
+    "exit $__zcode_exit",
+  ].join("\n");
 }
 
 export function readCapturedCwd(

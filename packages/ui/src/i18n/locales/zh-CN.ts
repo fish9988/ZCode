@@ -3567,7 +3567,7 @@ const zhCN: Record<string, string> = {
   "settings.terminalFontFamilyPlaceholder": "留空自动继承，例如 MesloLGS NF, monospace",
   "settings.integratedTerminalShell": "集成终端Shell",
   "settings.integratedTerminalShellDescription":
-    "在新建会话或应用重启后恢复的会话中使用。当前会话保持现有 shell；Windows 下 Bash 工具用此 shell，自动优先 Git Bash，找不到回退 cmd.exe。",
+    "在新建会话或应用重启后恢复的会话中使用。当前会话保持现有 shell；Windows 下可选择 PowerShell 7、Windows PowerShell、Git Bash 或 CMD，自动模式优先 Git Bash。",
   "settings.integratedTerminalShell.auto": "自动选择",
   "settings.toolSearch": "工具搜索",
   "settings.toolSearchDescription":

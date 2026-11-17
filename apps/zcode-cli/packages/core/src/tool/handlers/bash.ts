@@ -121,9 +121,9 @@ export function resolveBashPermissionCapability(
   context?: ToolRuntimePermissionCapabilityContext,
 ): ToolRuntimePermissionCapability | undefined {
   const command = readStringProperty(input, "command");
-  if (command && context?.mode === "guarded") {
+  if (command && context?.mode === "guarded" && context.bashShellSelection?.dialect !== "powershell") {
     // selection 缺失是基础设施状态而非语法边界；与下方 isRuntimeReadOnlyBashCommand 一致按 POSIX
-    // 文法匹配，避免 guarded 在 selection 尚未初始化时静默退回 YOLO。显式 legacy-shell 仍 unsupported。
+    // 文法匹配，避免 guarded 在 selection 尚未初始化时静默退回 YOLO。显式 legacy-shell / powershell 仍 unsupported。
     const match = matchDangerousCommand(
       command,
       context.bashShellSelection?.dialect ?? GUARDED_DEFAULT_DIALECT,
@@ -132,7 +132,7 @@ export function resolveBashPermissionCapability(
   }
   // Bash 会把 # 后的 CMD 命令当注释；异构 shell 不能用 Bash AST 证明整条命令只读。
   const dialect = context?.bashShellSelection?.dialect;
-  if (dialect === "cmd" || dialect === "legacy-shell") return undefined;
+  if (dialect === "cmd" || dialect === "powershell" || dialect === "legacy-shell") return undefined;
   if (!command || !isRuntimeReadOnlyBashCommand(command, context)) return undefined;
   return {
     destructive: false,
@@ -454,6 +454,7 @@ function commandShellKind(
   if (displayName?.includes("powershell")) return "powershell";
   if (displayName?.includes("zsh")) return "zsh";
   if (displayName?.includes("bash")) return "bash";
+  if (selection?.dialect === "powershell") return "powershell";
   if (selection?.dialect === "cmd") return "cmd";
   if (selection?.dialect === "posix") return "sh";
   return selection ? "other" : undefined;

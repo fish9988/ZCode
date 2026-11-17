@@ -18,7 +18,30 @@ export function listIntegratedTerminalShellOptions(options: {
     return [];
   }
 
-  const shellOptions: IntegratedTerminalShellOption[] = [createCommandPromptOption(options.env)];
+  const shellOptions: IntegratedTerminalShellOption[] = [];
+
+  const pwsh = resolveWindowsPwsh(options.env, options.isExecutable);
+  if (pwsh) {
+    shellOptions.push({
+      dialect: "powershell",
+      id: `powershell:${pwsh.path}`,
+      label: "PowerShell 7",
+      path: pwsh.path,
+      source: pwsh.source,
+    });
+  }
+
+  const winPowershell = resolveWindowsPowerShell(options.env, options.isExecutable);
+  if (winPowershell) {
+    shellOptions.push({
+      dialect: "powershell",
+      id: `powershell:${winPowershell.path}`,
+      label: "Windows PowerShell",
+      path: winPowershell.path,
+      source: winPowershell.source,
+    });
+  }
+
   const gitBash = resolveWindowsGitBash(options.env, options.isExecutable);
   if (gitBash) {
     shellOptions.push({
@@ -29,6 +52,8 @@ export function listIntegratedTerminalShellOptions(options: {
       source: gitBash.source,
     });
   }
+
+  shellOptions.push(createCommandPromptOption(options.env));
 
   return shellOptions;
 }
@@ -42,6 +67,54 @@ function createCommandPromptOption(env: NodeJS.ProcessEnv): IntegratedTerminalSh
     path,
     source: "system",
   };
+}
+
+function resolveWindowsPwsh(
+  env: NodeJS.ProcessEnv,
+  isExecutable?: ExecutableCheck,
+): { path: string; source: "system" | "path" } | undefined {
+  const localAppData = getWindowsEnvValue(env, "LOCALAPPDATA")?.trim();
+  const programFiles = getWindowsEnvValue(env, "ProgramFiles")?.trim() || "C:\\Program Files";
+  const programFilesX86 =
+    getWindowsEnvValue(env, "ProgramFiles(x86)")?.trim() || "C:\\Program Files (x86)";
+  const fixedCandidates = [
+    win32.join(programFiles, "PowerShell", "7", "pwsh.exe"),
+    win32.join(programFilesX86, "PowerShell", "7", "pwsh.exe"),
+    ...(localAppData ? [win32.join(localAppData, "Microsoft", "WindowsApps", "pwsh.exe")] : []),
+  ];
+
+  for (const candidate of fixedCandidates) {
+    if (isExecutableCandidate(candidate, isExecutable)) {
+      return { path: candidate, source: "system" };
+    }
+  }
+
+  const fromPath = windowsExecutableCandidates("pwsh", env).find((candidate) =>
+    isExecutableCandidate(candidate, isExecutable),
+  );
+  return fromPath ? { path: fromPath, source: "path" } : undefined;
+}
+
+function resolveWindowsPowerShell(
+  env: NodeJS.ProcessEnv,
+  isExecutable?: ExecutableCheck,
+): { path: string; source: "system" | "path" } | undefined {
+  const systemRoot = getWindowsEnvValue(env, "SystemRoot")?.trim() || "C:\\Windows";
+  const systemPath = win32.join(
+    systemRoot,
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  if (isExecutableCandidate(systemPath, isExecutable)) {
+    return { path: systemPath, source: "system" };
+  }
+
+  const fromPath = windowsExecutableCandidates("powershell", env).find((candidate) =>
+    isExecutableCandidate(candidate, isExecutable),
+  );
+  return fromPath ? { path: fromPath, source: "path" } : undefined;
 }
 
 function resolveWindowsGitBash(
