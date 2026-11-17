@@ -2244,6 +2244,19 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 
 app.whenReady().then(async () => {
   markMainLaunchAppReady();
+  const allowedDefaultSessionPermissions = new Set([
+    "local-fonts",
+    "media",
+    "clipboard-read",
+    "clipboard-sanitized-write",
+    "notifications",
+  ]);
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    return allowedDefaultSessionPermissions.has(permission);
+  });
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(allowedDefaultSessionPermissions.has(permission));
+  });
   installRequestSecurityDiagnostics(session.defaultSession.webRequest, logger);
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,

@@ -28,6 +28,7 @@ import type {
   SessionPhase,
 } from "@zcode/shared/zcode-protocol-v4";
 import { cn } from "@/components/lib/utils.js";
+import { ChatWidthResizeHandle } from "@/custom-appearance/index.js";
 import { runUserAction } from "@/lib/userActionTelemetry.js";
 import { Button } from "@/components/ui/button.js";
 import { useZCodeIntl } from "@/i18n/IntlProvider.js";
@@ -1996,6 +1997,19 @@ function ConversationTimelineImpl({
       />
       {/* Bugfix：分享选择流程无论面板展开还是收起，左 rail 都由分享面板或 reopen 按钮独占，
           必须隐藏对话轮导航，避免两个绝对定位控件互相覆盖。退出分享选择后自动恢复。 */}
+      {!compactForRemoteControl && !floatingComposerDock && !centeredEmptyLayout ? (
+        <div className="pointer-events-none absolute inset-0 z-30 flex justify-center">
+          <div
+            className={cn(
+              "relative h-full w-full",
+              contentWidthClassName,
+              summaryPanelInlineOffsetClassName,
+            )}
+          >
+            <ChatWidthResizeHandle containerRef={timelineRootRef} />
+          </div>
+        </div>
+      ) : null}
       {hideTurnNavigator ? null : (
         <ConversationTurnNavigator
           enabled={turnNavigatorEnabled}

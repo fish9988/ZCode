@@ -136,6 +136,7 @@ import type {
   RemoteConnectionOpenPreference,
 } from "@/app-shell/types.js";
 import { DEFAULT_LUCIDE_STROKE_WIDTH } from "@/components/icons/windowIcons.js";
+import { CustomAppearanceRuntime } from "@/custom-appearance/index.js";
 
 type WelcomeScreenOpenReason =
   | "startup-provider-required"
@@ -1608,6 +1609,7 @@ function RootInner({
     <RootShell>
       {rootModelSelectionErrorNode}
       {requestSecurityBridgeNode}
+      <CustomAppearanceRuntime theme={theme} />
       {remoteConnectionDialog}
       {directoryBrowserDialog}
       <OccupationOnboarding
