@@ -2239,6 +2239,7 @@ function ConversationTimelineImpl({
             >
               <div
                 data-v4-composer-dock-content="true"
+                data-centered-empty={centeredEmptyLayout ? "true" : undefined}
                 className={cn(
                   // 草稿内层会立即收窄，外层也必须直接定位，避免输入框从左侧滑向中间。
                   "pointer-events-auto relative z-10 w-full shrink-0",

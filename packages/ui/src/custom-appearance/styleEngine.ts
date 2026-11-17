@@ -16,6 +16,16 @@ function hexToSurfaceColor(hexOrCss: string, opacity: number): string {
   return `color-mix(in srgb, ${hexOrCss} ${pct}%, transparent)`;
 }
 
+function resolveContrastForeground(hex: string): string {
+  const clean = hex.trim().replace(/^#/, "");
+  if (!/^[0-9a-f]{6}$/i.test(clean)) return "#ffffff";
+  const r = Number.parseInt(clean.slice(0, 2), 16) / 255;
+  const g = Number.parseInt(clean.slice(2, 4), 16) / 255;
+  const b = Number.parseInt(clean.slice(4, 6), 16) / 255;
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.56 ? "#141413" : "#ffffff";
+}
+
 function buildAppearanceCss(config: CustomAppearanceConfig, resolvedMode: CustomBaseMode): string {
   const blocks: string[] = [];
   const palette = resolvedMode === "dark" ? config.darkColors : config.lightColors;
@@ -63,16 +73,37 @@ function buildAppearanceCss(config: CustomAppearanceConfig, resolvedMode: Custom
     ];
 
     if (config.enableCustomColors) {
+      const primaryFg = resolveContrastForeground(palette.brand);
       colorVars.push(
         `--color-brand: ${palette.brand};`,
         `--color-primary: ${palette.brand};`,
+        `--color-primary-foreground: ${primaryFg};`,
         `--color-resize-handle: ${palette.brand};`,
         `--color-foreground: ${palette.foreground};`,
         `--color-foreground-subtle: ${palette.foregroundSubtle};`,
+        `--color-foreground-subtlest: color-mix(in srgb, ${palette.foreground} 38%, transparent);`,
         `--color-border: ${palette.border};`,
+        `--color-border-hover: color-mix(in srgb, ${palette.foreground} 22%, transparent);`,
         `--color-card-border: ${palette.border};`,
+        `--color-card-selected: color-mix(in srgb, ${palette.foreground} 8%, ${cardColor});`,
+        `--color-surface: color-mix(in srgb, ${palette.foreground} 4%, transparent);`,
+        `--color-surface-hover: color-mix(in srgb, ${palette.foreground} 8%, transparent);`,
+        `--color-hover: color-mix(in srgb, ${palette.foreground} 6%, transparent);`,
+        `--color-secondary: color-mix(in srgb, ${palette.foreground} 9%, ${cardColor});`,
+        `--color-tag: color-mix(in srgb, ${palette.foreground} 9%, ${cardColor});`,
+        `--color-tab: ${sidebarColor};`,
+        `--color-tab-active: ${cardColor};`,
+        `--color-menu: ${cardColor};`,
+        `--color-menu-hover: color-mix(in srgb, ${palette.foreground} 6%, transparent);`,
+        `--color-toast: ${cardColor};`,
+        `--color-tooltip: ${cardColor};`,
+        `--color-tooltip-foreground: ${palette.foreground};`,
+        `--color-popover-foreground: ${palette.foreground};`,
+        `--color-popover-header: ${sidebarColor};`,
         `--color-popover-border: ${palette.border};`,
         `--color-input-border: ${palette.border};`,
+        `--color-input-border-hover: color-mix(in srgb, ${palette.foreground} 22%, transparent);`,
+        `--color-input-border-focused: ${palette.brand};`,
         `--color-selected: color-mix(in srgb, ${palette.brand} 14%, transparent);`,
         `--color-accent: color-mix(in srgb, ${palette.brand} 12%, transparent);`,
       );
@@ -167,14 +198,14 @@ function buildAppearanceCss(config: CustomAppearanceConfig, resolvedMode: Custom
     }
 
     blocks.push(
-      `[data-conversation-selectable="true"],\n[data-conversation-selectable="true"] p,\n[data-conversation-selectable="true"] li,\n[data-conversation-selectable="true"] blockquote,\n[data-v4-user-input-bubble="true"],\n[data-testid="v4-composer-input"],\n[data-testid="v4-composer-input"] [contenteditable="true"] {\n  ${chatProps.join("\n  ")}\n}`,
+      `[data-conversation-selectable="true"],\n[data-conversation-selectable="true"] p,\n[data-conversation-selectable="true"] li,\n[data-conversation-selectable="true"] blockquote,\n[data-conversation-selectable="true"] td,\n[data-conversation-selectable="true"] th,\n[data-v4-user-input-bubble="true"],\n[data-testid="v4-composer-input"],\n[data-testid="v4-composer-input"] [contenteditable="true"] {\n  ${chatProps.join("\n  ")}\n}\n[data-conversation-selectable="true"] :is(strong, b, h1, h2, h3, h4, h5, h6) {\n  font-weight: ${Math.max(700, config.fonts.chat.weight)};\n}\n[data-conversation-selectable="true"] :is(code, pre, kbd, samp) {\n  font-family: var(--font-mono);\n}`,
     );
   }
 
   if (config.layout.chatMaxWidthPx !== null) {
     const px = config.layout.chatMaxWidthPx;
     blocks.push(
-      `:root:root {\n  --zcode-chat-max-width: ${px}px;\n}\n[data-v4-timeline-content-column="true"],\n[data-v4-composer-dock-content="true"],\n[data-zcode-resize-frame="true"] {\n  max-width: min(calc(100% - 2rem), var(--zcode-chat-max-width)) !important;\n  width: 100% !important;\n}\n@container conversation (width >= 1280px) {\n  [data-v4-timeline-content-column="true"][class*="-translate-x-42"],\n  [data-v4-composer-dock-content="true"][class*="-translate-x-42"],\n  [data-zcode-resize-frame="true"][class*="-translate-x-42"] {\n    max-width: min(calc(100% - 24rem), var(--zcode-chat-max-width)) !important;\n  }\n}`,
+      `:root:root {\n  --zcode-chat-max-width: ${px}px;\n}\n.chat-composer-region {\n  margin-inline: auto;\n}\n[data-v4-timeline-content-column="true"],\n[data-v4-composer-dock-content="true"]:not([data-centered-empty="true"]),\n[data-zcode-resize-frame="true"] {\n  max-width: min(calc(100% - 2rem), var(--zcode-chat-max-width)) !important;\n  width: 100% !important;\n}\n@container conversation (width >= 1280px) {\n  [data-v4-timeline-content-column="true"][class*="-translate-x-42"],\n  [data-v4-composer-dock-content="true"]:not([data-centered-empty="true"])[class*="-translate-x-42"],\n  [data-zcode-resize-frame="true"][class*="-translate-x-42"] {\n    max-width: min(calc(100% - 24rem), var(--zcode-chat-max-width)) !important;\n  }\n}`,
     );
   }
 

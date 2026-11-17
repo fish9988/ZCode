@@ -42,14 +42,17 @@ export function ChatWidthResizeHandle({
   useEffect(() => () => clearHoverTimer(), [clearHoverTimer]);
 
   const measureCurrentWidth = useCallback(() => {
-    if (chatMaxWidthPx !== null) return chatMaxWidthPx;
     const container = containerRef.current;
-    if (!container) return CHAT_WIDTH_DEFAULT_PX;
-    const contentColumn = container.querySelector<HTMLElement>(
-      '[data-v4-timeline-content-column="true"]',
-    );
-    const measured = contentColumn?.getBoundingClientRect().width;
-    return measured && measured > 200 ? Math.round(measured) : CHAT_WIDTH_DEFAULT_PX;
+    if (container) {
+      const contentColumn = container.querySelector<HTMLElement>(
+        '[data-v4-timeline-content-column="true"]',
+      );
+      const measured = contentColumn?.getBoundingClientRect().width;
+      if (measured && measured > 200) {
+        return Math.round(measured);
+      }
+    }
+    return chatMaxWidthPx ?? CHAT_WIDTH_DEFAULT_PX;
   }, [chatMaxWidthPx, containerRef]);
 
   const handlePointerEnter = useCallback(() => {
@@ -152,7 +155,7 @@ export function ChatWidthResizeHandle({
         onPointerDown={handlePointerDown}
         onDoubleClick={handleDoubleClick}
         className={cn(
-          "pointer-events-auto group/resize-handle absolute top-1/4 -left-3 z-30 flex h-1/2 w-3 cursor-ew-resize items-center justify-center",
+          "pointer-events-auto group/resize-handle absolute top-1/4 -left-1.5 z-30 flex h-1/2 w-3 cursor-ew-resize items-center justify-center",
           "transition-opacity duration-150",
           isVisible ? "opacity-100" : "opacity-0",
         )}
@@ -166,7 +169,7 @@ export function ChatWidthResizeHandle({
           )}
         />
         {isVisible ? (
-          <div className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-ui-xs font-medium text-popover-foreground shadow-sm">
+          <div className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-0.5 text-ui-xs font-medium text-popover-foreground shadow-sm">
             {liveWidthPx ?? chatMaxWidthPx ?? "默认"}
             {liveWidthPx !== null || chatMaxWidthPx !== null ? " px" : ""}
             <span className="ml-1.5 text-foreground-subtle">双击还原</span>
