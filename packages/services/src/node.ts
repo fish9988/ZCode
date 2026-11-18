@@ -1719,9 +1719,38 @@ export function createLocalServices(options: {
     }),
   });
   const accountProviderRuntimeLog = createServiceLogger("account-provider-runtime");
-  const modelSelectionConfiguredDefaultSource = new NodeModelSelectionConfigRepository({
+  const nodeModelSelectionConfigRepo = new NodeModelSelectionConfigRepository({
     personalRepository: providerConfigRuntime.personalRepository,
   });
+  const modelSelectionConfiguredDefaultSource = {
+    async read() {
+      const settings = await settingService.get();
+      if (settings.defaultModelSelection) {
+        return settings.defaultModelSelection;
+      }
+      return nodeModelSelectionConfigRepo.read();
+    },
+    onDidChange(listener: () => void) {
+      const disposeRepo = nodeModelSelectionConfigRepo.onDidChange(() => listener());
+      const disposeSettings = settingService.onDidUpdate((event) => {
+        if (
+          event.keys.includes("defaultModelSelection") ||
+          event.keys.includes("officialPlansEnabled")
+        ) {
+          listener();
+        }
+      });
+      return () => {
+        disposeRepo();
+        disposeSettings();
+      };
+    },
+  };
+  const officialPlansPolicy = {
+    async isEnabled() {
+      return (await settingService.get()).officialPlansEnabled !== false;
+    },
+  };
   const providerProvisioningSource = createProviderProvisioningSource({
     cipherProvider: credentialCipherProvider,
     personalRepository: providerConfigRuntime.personalRepository,
@@ -1765,8 +1794,8 @@ export function createLocalServices(options: {
     configRuntime: providerConfigRuntime,
     accountSource: accountProviderConfigSource,
     modelSelectionConfiguredDefaultSource,
-    disposeModelSelectionConfiguredDefaultSource: () =>
-      modelSelectionConfiguredDefaultSource.dispose(),
+    disposeModelSelectionConfiguredDefaultSource: () => nodeModelSelectionConfigRepo.dispose(),
+    officialPlansPolicy,
     testConnectivity: createProviderSettingsConnectivityTester({
       testModelConnectivity: async (input) => {
         if (!providerConnectivityAgentService) {

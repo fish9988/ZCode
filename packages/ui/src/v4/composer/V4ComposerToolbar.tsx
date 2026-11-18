@@ -1028,6 +1028,7 @@ function V4ComposerModelControlsImpl({
     ],
   );
 
+  const officialPlansEnabled = sharedSettings?.officialPlansEnabled !== false;
   const planGroups = useMemo(
     () =>
       buildComposerPlanGroups(
@@ -1037,6 +1038,7 @@ function V4ComposerModelControlsImpl({
         displayProvider,
         modelGroupLabels,
         sharedSettings?.providerFamilyConnectionSelections,
+        officialPlansEnabled,
       ),
     [
       modelSelectGroups,
@@ -1045,6 +1047,7 @@ function V4ComposerModelControlsImpl({
       displayProvider,
       modelGroupLabels,
       sharedSettings?.providerFamilyConnectionSelections,
+      officialPlansEnabled,
     ],
   );
   const connectionSwitch = useComposerConnectionSwitch({

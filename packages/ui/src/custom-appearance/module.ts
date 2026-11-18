@@ -4,7 +4,7 @@
  */
 export const customAppearanceModule = {
   id: "custom-appearance",
-  requires: ["ui"],
+  requires: ["ui", "shared"],
   provides: ["custom-appearance"],
   publicEntrypoints: ["index.ts", "contract.ts"],
 } as const;

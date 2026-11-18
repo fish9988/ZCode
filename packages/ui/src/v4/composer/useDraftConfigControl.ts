@@ -321,13 +321,34 @@ export function useDraftConfigControl(params: {
       modelSelectionView,
       rootScope,
     );
+    const preferConfiguredDefault =
+      Boolean(sharedSettings?.defaultModelSelection) &&
+      sharedSettings?.preferDefaultModelForNewTasks !== false;
+    const preferredSelection = resolveDraftInitialModelSelection(modelSelectionView, null).selection;
+    if (preferConfiguredDefault && preferredSelection) {
+      draft = { ...draft, modelSelection: preferredSelection };
+    } else if (draft.modelSelection) {
+      const checked = resolveDraftInitialModelSelection(modelSelectionView, draft.modelSelection);
+      if (checked.invalidated || !checked.selection) {
+        draft = { ...draft, modelSelection: preferredSelection ?? undefined };
+      }
+    }
   }
   // 空配置先初始化了权限，旧逻辑便因已有 mode 永久跳过模型初始化。
   // 仅为无模型原意图的 Root 草稿补齐首次可用选择；不重置正文、权限或 Plan，
   // 也不替换失效的旧选择、已有 Session 或分享导入的配置。
-  if (sessionId === null && !draft.modelSelection && modelSelectionView) {
-    const selection = resolveDraftInitialModelSelection(modelSelectionView, null).selection;
-    if (selection) draft = { ...draft, modelSelection: selection };
+  if (sessionId === null && modelSelectionView) {
+    if (!draft.modelSelection) {
+      const selection = resolveDraftInitialModelSelection(modelSelectionView, null).selection;
+      if (selection) draft = { ...draft, modelSelection: selection };
+    } else if (
+      modelSelectionView.effectiveSelection === null &&
+      modelSelectionView.selectionIssue === "provider-not-found" &&
+      sharedSettings?.officialPlansEnabled === false
+    ) {
+      const selection = resolveDraftInitialModelSelection(modelSelectionView, null).selection;
+      if (selection) draft = { ...draft, modelSelection: selection };
+    }
   }
   // edit scope 的模式/Plan 是本次编辑的提交配置，不能被 Session 快照的首帧初始化覆盖。
   if (sessionId && sessionConfig && currentState.initialization !== "edit") {

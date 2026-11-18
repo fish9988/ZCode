@@ -112,6 +112,20 @@ export function resolveModelProviderFamilyLabelByProviderId(providerId: string):
   return resolveModelProviderFamilySpecByProviderId(providerId)?.label ?? null;
 }
 
+export function isOfficialPlanProvider(provider: {
+  readonly providerId: string;
+  readonly group?: string | null;
+  readonly access?: { readonly type?: string | null } | null;
+}): boolean {
+  if (resolveModelProviderFamilyIdByProviderId(provider.providerId) !== null) {
+    return true;
+  }
+  if (provider.group === "zai-family" || provider.group === "bigmodel-family") {
+    return true;
+  }
+  return provider.access?.type === "zhipu-account";
+}
+
 export function normalizeProviderFamilyDomain(
   value: string | null | undefined,
 ): ProviderFamilyDomain | null {

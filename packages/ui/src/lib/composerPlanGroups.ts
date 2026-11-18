@@ -59,7 +59,14 @@ export function buildComposerPlanGroups(
   agentProvider: ZCodeProvider = "glm",
   labels: ModelProviderGroupLabelOptions = {},
   selections?: Partial<Record<ProviderFamilyDomain, ProviderFamilyConnectionSelection>>,
+  officialPlansEnabled = true,
 ): ComposerPlanGroup[] {
+  if (!officialPlansEnabled) {
+    return groups.filter((group) => {
+      const providerId = group.key.replace(/^registry-provider:/, "");
+      return !resolveModelProviderFamilySpecByProviderId(providerId);
+    });
+  }
   // 原因：团队共用 Provider ID，服务状态只校验当前团队；不能整组隐藏其他团队身份。
   const isAvailable = (providerId: string) =>
     settingsView?.providers.find((provider) => provider.providerId === providerId)?.accountState

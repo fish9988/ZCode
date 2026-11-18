@@ -98,5 +98,10 @@ export function normalizeSettingsPatch(patch: Partial<AppSettings>): Partial<App
     normalizedPatch.dynamicWorkflowMode = undefined;
   }
 
+  if ("defaultModelSelection" in normalizedPatch && normalizedPatch.defaultModelSelection === null) {
+    // 全局默认模型选回“自动”时需清除持久化配置；RPC 会吞掉 undefined，用 null 作为删除哨兵。
+    normalizedPatch.defaultModelSelection = undefined;
+  }
+
   return normalizedPatch;
 }

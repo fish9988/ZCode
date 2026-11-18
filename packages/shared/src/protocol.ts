@@ -352,6 +352,12 @@ export interface AppSettings {
   dynamicWorkflowMode?: DynamicWorkflowMode;
   /** 已启用的内置 Agent CLI；UI 对外仍展示为“Install”，底层语义保持为启用内置能力。 */
   enabledBuiltinAgentCliProviders?: ZCodeProvider[];
+  /** 是否启用智谱 / Z.ai 官方 Plan（BigModel / Start Plan 等）；缺失按 true 兼容旧设置。 */
+  officialPlansEnabled?: boolean;
+  /** 全局默认模型配置；null 表示显式清空回到自动选择。 */
+  defaultModelSelection?: import("./model-selection.js").ModelSelection | null;
+  /** 设置了默认模型时，新建对话是否优先使用该默认模型（忽略项目最近使用记忆）；缺失按 true。 */
+  preferDefaultModelForNewTasks?: boolean;
   /** 设置页中每个 Provider Family 当前唯一的结构化连接选择。 */
   providerFamilyConnectionSelections?: ProviderFamilyConnectionSelectionSettings;
   /** 用户通过 WelcomeScreen 成功连接后确认的 ZAI / BigModel provider family 运行域。 */

@@ -19,6 +19,7 @@ interface ModelProviderSectionLayoutProps {
   onSelectNavItem: (item: ModelProviderNavGroup["items"][number]) => void;
   onReorderProviderIds?: (providerIds: string[]) => Promise<void>;
   reorderableProviderIds?: ReadonlySet<string>;
+  headerSlot?: ReactNode;
   children: ReactNode;
 }
 
@@ -43,6 +44,7 @@ export function ModelProviderSectionLayout({
   onSelectNavItem,
   onReorderProviderIds,
   reorderableProviderIds,
+  headerSlot,
   children,
 }: ModelProviderSectionLayoutProps) {
   const refreshButtonLoading = shouldShowModelProviderRefreshLoading({
@@ -63,6 +65,8 @@ export function ModelProviderSectionLayout({
           newTestId={TID_MODEL_PROVIDER_ADD_PROVIDER_BUTTON}
         />
       </div>
+
+      {headerSlot}
 
       <div className="overflow-clip rounded-xl border border-border bg-card">
         <div

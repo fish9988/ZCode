@@ -1836,6 +1836,7 @@ modules:
     managed: true
     requires:
       - ui
+      - shared
     publicEntrypoints:
       - packages/ui/src/custom-appearance/index.ts
       - packages/ui/src/custom-appearance/contract.ts

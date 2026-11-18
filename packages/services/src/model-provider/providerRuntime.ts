@@ -22,6 +22,7 @@ import {
   type IModelSelectionService,
   type IProviderSettingsService,
   type ModelSelectionConfiguredDefaultSource,
+  type OfficialPlansPolicy,
   type ProviderSettingsConnectivityTester,
 } from "./providerFacadeServices.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
@@ -40,6 +41,7 @@ export interface ProviderRuntimeDependencies {
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
   readonly modelSelectionConfiguredDefaultSource?: ModelSelectionConfiguredDefaultSource;
   readonly disposeModelSelectionConfiguredDefaultSource?: () => void;
+  readonly officialPlansPolicy?: OfficialPlansPolicy;
 }
 
 interface RefreshableProviderSource<TSnapshot> extends ProviderSource<TSnapshot> {
@@ -113,6 +115,7 @@ export class ProviderRuntime {
       createNodeModelSelectionFacade(this.registryService),
       ensureReady,
       dependencies.modelSelectionConfiguredDefaultSource,
+      dependencies.officialPlansPolicy,
     );
     this.modelSelection = this.#modelSelectionRuntime;
   }

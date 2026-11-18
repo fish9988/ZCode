@@ -44,6 +44,7 @@ import {
 } from "./model-provider-section/constants.js";
 import { ModelProviderSectionDetail } from "./model-provider-section/Detail.js";
 import { ModelProviderSectionLayout } from "./model-provider-section/SectionLayout.js";
+import { DefaultModelAndOfficialPlanBar } from "@/custom-appearance/index.js";
 import { ProviderTemplatePicker } from "./model-provider-section/ProviderTemplatePicker.js";
 import type { CodingPlanLoginOptions } from "./model-provider-section/codingPlanPricingCards.js";
 import { useModelProviderNavigation } from "./model-provider-section/useModelProviderNavigation.js";
@@ -1162,6 +1163,7 @@ export function ModelProviderSection({
       onSelectNavItem={handleSelectNavItem}
       onReorderProviderIds={handleReorderProviderIds}
       reorderableProviderIds={reorderableProviderIds}
+      headerSlot={<DefaultModelAndOfficialPlanBar />}
     >
       {(invalidProviderTarget || navigationUnavailable) && !templatePickerOpen ? (
         <p role="alert" className="mb-3 text-ui-base text-destructive">
@@ -1171,6 +1173,14 @@ export function ModelProviderSection({
               : "settings.modelProvider.connectionUnavailable",
           })}
         </p>
+      ) : null}
+      {sharedSettings?.officialPlansEnabled === false &&
+      selectedNavItem &&
+      selectedNavItem.type !== "custom" &&
+      !templatePickerOpen ? (
+        <div className="mb-4 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-ui-base text-foreground-subtle">
+          智谱官方 Plan 已停用：该分组下的模型不会出现在聊天模型列表中，也不会作为默认或回退模型使用。如需恢复，请打开上方的「启用智谱官方 Plan」开关。
+        </div>
       ) : null}
       {templatePickerOpen ? (
         <ProviderTemplatePicker

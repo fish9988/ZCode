@@ -17,6 +17,7 @@ import {
   embeddedBrowserViewportPreferenceSchema,
 } from "./browser-use/command-metadata.js";
 import { providerFamilyConnectionSelectionSettingsSchema } from "./provider-family-connection-selection.js";
+import { modelSelectionSchema } from "./model-selection.js";
 import {
   connectionProfileSchema,
   sourceServerRecordSchema,
@@ -573,6 +574,9 @@ const appSettingsObjectSchema = z.object({
     ...ZCODE_ENABLED_AGENT_PROVIDERS,
   ]),
   startPlanRecommendationDismissed: z.boolean().default(false),
+  officialPlansEnabled: z.boolean().optional(),
+  defaultModelSelection: modelSelectionSchema.nullish(),
+  preferDefaultModelForNewTasks: z.boolean().optional(),
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.default({}),
   providerFamilyDomain: providerFamilyDomainSchema.optional(),
   providerFamilyDomainUpdatedAt: z.number().int().nonnegative().optional(),
@@ -670,6 +674,9 @@ export const appSettingsPatchSchema = z.object({
   dynamicWorkflowMode: z.union([z.enum(DYNAMIC_WORKFLOW_MODES), z.literal("")]).optional(),
   enabledBuiltinAgentCliProviders: enabledBuiltinAgentCliProvidersSchema.optional(),
   startPlanRecommendationDismissed: z.boolean().optional(),
+  officialPlansEnabled: z.boolean().optional(),
+  defaultModelSelection: modelSelectionSchema.nullish(),
+  preferDefaultModelForNewTasks: z.boolean().optional(),
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.optional(),
   providerFamilyDomain: z.union([providerFamilyDomainSchema, z.literal("")]).optional(),
   providerFamilyDomainUpdatedAt: z.number().int().nonnegative().optional(),

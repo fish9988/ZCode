@@ -1,6 +1,7 @@
 import type { Event } from "@zcode/rpc";
-import { ServiceChannels } from "@zcode/shared";
+import { ServiceChannels, isOfficialPlanProvider } from "@zcode/shared";
 import {
+  completeNewModelSelection,
   type ModelConfigObject,
   type ModelId,
   type ModelSelection,
@@ -99,6 +100,11 @@ export interface IModelSelectionService {
 
 export interface ModelSelectionConfiguredDefaultSource {
   read(): Promise<ModelSelection | undefined>;
+  onDidChange?(listener: () => void): () => void;
+}
+
+export interface OfficialPlansPolicy {
+  isEnabled(): Promise<boolean> | boolean;
   onDidChange?(listener: () => void): () => void;
 }
 
@@ -213,6 +219,7 @@ export function createModelSelectionService(
   facade: ModelSelectionFacade,
   ensureReady: () => Promise<void> = async () => {},
   configuredDefaultSource?: ModelSelectionConfiguredDefaultSource,
+  officialPlansPolicy?: OfficialPlansPolicy,
 ): IModelSelectionService & { dispose(): void } {
   const log = createServiceLogger("model-selection");
   let revision = 0;
@@ -221,11 +228,65 @@ export function createModelSelectionService(
   const getView = async (input?: ModelSelectionViewInput): Promise<ModelSelectionView> => {
     await ensureReady();
     if (disposed) throw new Error("ModelSelectionService 已 dispose");
-    const configuredDefault = await configuredDefaultSource?.read();
+    const [configuredDefault, officialPlansEnabled] = await Promise.all([
+      configuredDefaultSource?.read(),
+      officialPlansPolicy ? officialPlansPolicy.isEnabled() : true,
+    ]);
     if (disposed) throw new Error("ModelSelectionService 已 dispose");
     const base = facade.getView(configuredDefault);
     if (revision < base.revision) revision = base.revision;
-    return facade.getView(configuredDefault, revision, input);
+    const rawView = facade.getView(configuredDefault, revision, input);
+    if (officialPlansEnabled) {
+      return rawView;
+    }
+
+    const filteredProviders = Object.freeze(
+      rawView.providers.filter(
+        (provider) =>
+          !isOfficialPlanProvider({
+            providerId: provider.providerId,
+            group: provider.config.group,
+            access: provider.config.access,
+          }),
+      ),
+    );
+    const allowedProviderIds = new Set(filteredProviders.map((provider) => provider.providerId));
+
+    let nextPreferred =
+      rawView.preferredSelection && allowedProviderIds.has(rawView.preferredSelection.providerId)
+        ? rawView.preferredSelection
+        : undefined;
+    if (!nextPreferred) {
+      for (const provider of filteredProviders) {
+        const firstModel = provider.models[0];
+        if (!firstModel) continue;
+        const candidate = completeNewModelSelection(
+          { providers: filteredProviders },
+          { providerId: provider.providerId, modelId: firstModel.modelId },
+        );
+        if (candidate) {
+          nextPreferred = Object.freeze(candidate);
+          break;
+        }
+      }
+    }
+
+    const nextEffective =
+      rawView.effectiveSelection && !allowedProviderIds.has(rawView.effectiveSelection.providerId)
+        ? null
+        : rawView.effectiveSelection;
+    const nextIssue =
+      rawView.effectiveSelection && !allowedProviderIds.has(rawView.effectiveSelection.providerId)
+        ? ("provider-not-found" as const)
+        : rawView.selectionIssue;
+
+    return Object.freeze({
+      revision: rawView.revision,
+      providers: filteredProviders,
+      ...(nextPreferred ? { preferredSelection: nextPreferred } : {}),
+      ...(nextEffective !== undefined ? { effectiveSelection: nextEffective } : {}),
+      ...(nextIssue !== undefined ? { selectionIssue: nextIssue } : {}),
+    });
   };
   const emit = (): void => {
     if (disposed) return;
@@ -246,6 +307,7 @@ export function createModelSelectionService(
   };
   const disposeFacade = facade.onDidChange(emit);
   const disposeConfiguredDefault = configuredDefaultSource?.onDidChange?.(emit);
+  const disposeOfficialPlansPolicy = officialPlansPolicy?.onDidChange?.(emit);
 
   return {
     onDidChange: (listener) => {
@@ -258,6 +320,7 @@ export function createModelSelectionService(
       disposed = true;
       disposeFacade();
       disposeConfiguredDefault?.();
+      disposeOfficialPlansPolicy?.();
       listeners.clear();
     },
   };
