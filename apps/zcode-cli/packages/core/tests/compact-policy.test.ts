@@ -14,9 +14,11 @@ import {
   DSH_SUMMARIZATION_SYSTEM_PROMPT,
   appendDshFileOperationsToSummary,
   buildDshCompactSummaryRequest,
+  coreMessagesToRuntimeEntries,
   createAcpSessionController,
   pruneToolResultText,
   resolveDshSummaryMaxOutputTokens,
+  runtimeEntriesToCoreMessages,
   stripSupermemoryBlocks,
 } from "../src/context-compression/index.js";
 import { selectCompactEntries } from "../src/runtime/helpers/compact-selection.js";
@@ -665,5 +667,80 @@ describe("native billion-context (acp-kernel) session controller", () => {
       sessionStore,
     );
     expect(turn3.activeBlockCount).toBe(0);
+  });
+
+  it("keeps tool-call/result strictly paired without duplicating multi-tool assistant bursts", () => {
+    const entries: RuntimeMessageEntry[] = [
+      { message: { role: "system", content: "You are ZCode." }, metadata: { source: "context_prefix" } },
+      { message: { role: "user", content: "Inspect and compress." } },
+      {
+        message: {
+          role: "assistant",
+          content: "",
+          toolCalls: [
+            { id: "call_compress", name: "compress", input: { content: "m00001-m00002 s" } },
+            { id: "call_bash", name: "Bash", input: { command: "ls" } },
+            { id: "call_read", name: "Read", input: { file_path: "a.ts" } },
+          ],
+        },
+      },
+      { message: { role: "tool", toolCallId: "call_compress", toolName: "compress", content: "ok" } },
+      { message: { role: "tool", toolCallId: "call_bash", toolName: "Bash", content: "fileA" } },
+      { message: { role: "tool", toolCallId: "call_read", toolName: "Read", content: "const x = 1;" } },
+    ];
+
+    const mapping = runtimeEntriesToCoreMessages(entries);
+
+    // 1. Full round-trip: multi-tool burst must emit ONE assistant entry (no bogus text duplicates)
+    const full = coreMessagesToRuntimeEntries({
+      mapping,
+      renderedMessages: mapping.coreMessages,
+    });
+    const fullAssistant = full.entries.filter(
+      (e) => !("kind" in e && e.kind === "attachment") && e.message.role === "assistant",
+    );
+    expect(fullAssistant).toHaveLength(1);
+    expect(
+      !("kind" in fullAssistant[0]! && fullAssistant[0]!.kind === "attachment") &&
+        fullAssistant[0]!.message.toolCalls?.map((tc) => tc.id),
+    ).toEqual(["call_compress", "call_bash", "call_read"]);
+
+    // 2. Partial fold: Bash & Read results folded, only compress survives -> strip dangling Bash/Read calls
+    const onlyCompressRendered = mapping.coreMessages.filter(
+      (m) => m.toolCallId !== "call_bash" && m.toolCallId !== "call_read",
+    );
+    const partial = coreMessagesToRuntimeEntries({
+      mapping,
+      renderedMessages: onlyCompressRendered,
+    });
+    const partialAssistant = partial.entries.filter(
+      (e) => !("kind" in e && e.kind === "attachment") && e.message.role === "assistant",
+    );
+    const partialTools = partial.entries.filter(
+      (e) => !("kind" in e && e.kind === "attachment") && e.message.role === "tool",
+    );
+    expect(partialAssistant).toHaveLength(1);
+    expect(
+      !("kind" in partialAssistant[0]! && partialAssistant[0]!.kind === "attachment") &&
+        partialAssistant[0]!.message.toolCalls?.map((tc) => tc.id),
+    ).toEqual(["call_compress"]);
+    expect(partialTools).toHaveLength(1);
+
+    // 3. Hide consumed compress call+result -> keep Bash & Read paired, no dangling compress call
+    const hideCompressRendered = mapping.coreMessages.filter(
+      (m) => m.toolCallId !== "call_compress",
+    );
+    const hiddenCompress = coreMessagesToRuntimeEntries({
+      mapping,
+      renderedMessages: hideCompressRendered,
+    });
+    const hcAssistant = hiddenCompress.entries.filter(
+      (e) => !("kind" in e && e.kind === "attachment") && e.message.role === "assistant",
+    );
+    expect(hcAssistant).toHaveLength(1);
+    expect(
+      !("kind" in hcAssistant[0]! && hcAssistant[0]!.kind === "attachment") &&
+        hcAssistant[0]!.message.toolCalls?.map((tc) => tc.id),
+    ).toEqual(["call_bash", "call_read"]);
   });
 });

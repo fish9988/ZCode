@@ -30,7 +30,7 @@ $$\text{effectiveWindow} = \min\big(\text{model.effectiveContextWindow} \;\text{
 | 模式 | 说明 |
 | --- | --- |
 | `dsh-compact`（默认） | 移植自 `pi-dsh-compact`：平时零开销、默认在 `effectiveWindow * 60%`（可配 30%–95%）触发，保留约 20% 近期完整轮次；序列化时执行头 4,096 + 尾 1,024 工具裁剪与 `<supermemory>` 剥离，以无工具独立请求输出 DSH 8 章节检查点并追加 `<read-files>` / `<modified-files>` 双保险，支持 `<compacted-summary>` 多代增量合并、`recoverOnOverflow` 与可选 `microcompactEnabled` |
-| `billion-context` | 原生调用 `acp-kernel`（来自 `ranxianglei/billion-context/kernel`）：注入免审批内置工具 `compress`、`decompress`、`search_context`、`acp_status`，在发往模型前经 `processTurn` 投影折叠视图与临时 nudge，状态按 `branchGeneration` 持久化到 SQLite `session_entry`（`type = "runtime/acp_compression_state"`），自动跳过原生 `autoCompactIfNeeded` 防止双压缩 |
+| `billion-context` | 原生调用 `acp-kernel`（来自 `ranxianglei/billion-context/kernel`）：注入免审批内置工具 `compress`、`decompress`、`search_context`、`acp_status`，在发往模型前经 `processTurn` 投影折叠视图与临时 nudge，状态按 `branchGeneration` 持久化到 SQLite `session_entry`（`type = "runtime/acp_compression_state"`），自动跳过原生 `autoCompactIfNeeded` 防止双压缩；桥接层使用 `#tc_N` 子 ID 对齐 `baseIdOf()` 语义，并在还原时保证 `toolCalls` 与 `tool-result` 严格成对（过滤悬空调用与孤儿结果） |
 | `legacy` | 保留 ZCode 原版 100% 阈值（`effectiveWindow - 21K - 13K`）、固定保留最近 1 轮与原版摘要提示词行为 |
 | `disabled` | 禁用自动压缩与溢出压缩，仅保留手动 `/compact` |
 

@@ -26,16 +26,38 @@ export interface EntryCoreMapping {
 const ACP_SYSTEM_PROMPT_MARKER = "ACP TAGS";
 const ACP_TAG_PREFIX_RE = /^(<acp\b[^>]*>[^<]*<\/acp>\s*)/u;
 
+function sanitizeBaseId(raw: string): string {
+  // acp-kernel 的 baseIdOf(id) 按首个 '#' 截断子块后缀，因此基础 ID 本身不得包含 '#'。
+  return raw.replace(/#/gu, "_");
+}
+
 function stableBaseIdForEntry(entry: RuntimeMessageEntry, index: number): string {
   if (!isRuntimeAttachmentEntry(entry)) {
     const groupKey = entry.compactGroupKey?.trim();
-    if (groupKey) return groupKey;
+    if (groupKey) return sanitizeBaseId(groupKey);
     const toolCallId = entry.message.toolCallId?.trim();
-    if (toolCallId) return `tc_res_${toolCallId}`;
+    if (toolCallId) return sanitizeBaseId(`tc_res_${toolCallId}`);
     const firstCallId = entry.message.toolCalls?.[0]?.id?.trim();
-    if (firstCallId) return `tc_call_${firstCallId}`;
+    if (firstCallId) return sanitizeBaseId(`tc_call_${firstCallId}`);
   }
   return `rt_entry_${index}`;
+}
+
+function hasMeaningfulAssistantContent(
+  content: RuntimeMessageMessageEntry["message"]["content"],
+): boolean {
+  if (typeof content === "string") {
+    return content.trim().length > 0;
+  }
+  if (Array.isArray(content)) {
+    return content.some((part) => {
+      if (part.type === "text" || part.type === "reasoning") {
+        return part.text.trim().length > 0;
+      }
+      return true;
+    });
+  }
+  return false;
 }
 
 function entryText(entry: RuntimeMessageEntry): string {
@@ -71,7 +93,7 @@ export function runtimeEntriesToCoreMessages(
     const rawBase = stableBaseIdForEntry(entry, i);
     const seenCount = usedBaseIds.get(rawBase) ?? 0;
     usedBaseIds.set(rawBase, seenCount + 1);
-    const baseId = seenCount === 0 ? rawBase : `${rawBase}#${seenCount}`;
+    const baseId = seenCount === 0 ? rawBase : `${rawBase}~${seenCount}`;
     entryByBaseId.set(baseId, entry);
 
     if (isRuntimeAttachmentEntry(entry)) {
@@ -123,7 +145,7 @@ export function runtimeEntriesToCoreMessages(
         const argsText =
           typeof tc.input === "string" ? tc.input : JSON.stringify(tc.input ?? {});
         coreMessages.push({
-          id: tcIndex === 0 && !text ? baseId : `${baseId}::tc_${tcIndex}`,
+          id: tcIndex === 0 && !text ? baseId : `${baseId}#tc_${tcIndex}`,
           role: "assistant",
           contentType: "tool-call",
           toolName: tc.name,
@@ -222,6 +244,29 @@ export function coreMessagesToRuntimeEntries(input: {
 }): { readonly entries: RuntimeMessageEntry[]; readonly nudgeInjected: boolean } {
   const result: RuntimeMessageEntry[] = ensureAcpSystemPrompt(input.mapping.prefixEntries);
   const emittedBaseIds = new Set<string>();
+  const emittedToolCallIds = new Set<string>();
+
+  // 预扫描 renderedMessages，找出“工具调用与后续工具结果双双保留”的 toolCallId 集合，
+  // 防止同批并行调用（如 compress + Bash + Read）发生局部隐藏/折叠时重发出悬空 toolCall 或孤儿 tool-result。
+  const seenCallIds = new Set<string>();
+  const pairedToolCallIds = new Set<string>();
+  for (const coreMsg of input.renderedMessages) {
+    if (isSummaryMessageId(coreMsg.id) || isRenderedSummaryMessage(coreMsg)) continue;
+    const baseId = baseIdOf(coreMsg.id);
+    const original = input.mapping.entryByBaseId.get(baseId);
+    if (!original || isRuntimeAttachmentEntry(original)) continue;
+    const toolCallId = coreMsg.toolCallId?.trim();
+    if (!toolCallId) continue;
+    if (coreMsg.contentType === "tool-call" && original.message.role === "assistant") {
+      seenCallIds.add(toolCallId);
+    } else if (
+      coreMsg.contentType === "tool-result" &&
+      original.message.role === "tool" &&
+      seenCallIds.has(toolCallId)
+    ) {
+      pairedToolCallIds.add(toolCallId);
+    }
+  }
 
   for (const coreMsg of input.renderedMessages) {
     if (isSummaryMessageId(coreMsg.id) || isRenderedSummaryMessage(coreMsg)) {
@@ -244,12 +289,40 @@ export function coreMessagesToRuntimeEntries(input: {
     if (original) {
       emittedBaseIds.add(baseId);
       const cloned = cloneRuntimeMessageEntry(original);
+      if (!isRuntimeAttachmentEntry(cloned)) {
+        if (cloned.message.role === "tool") {
+          const toolCallId = cloned.message.toolCallId?.trim();
+          if (toolCallId && !emittedToolCallIds.has(toolCallId)) {
+            continue;
+          }
+        } else if (cloned.message.role === "assistant" && cloned.message.toolCalls?.length) {
+          const keptToolCalls = cloned.message.toolCalls.filter((tc) =>
+            pairedToolCallIds.has(tc.id.trim()),
+          );
+          if (keptToolCalls.length > 0) {
+            cloned.message.toolCalls = keptToolCalls;
+            for (const tc of keptToolCalls) {
+              const id = tc.id.trim();
+              if (id) emittedToolCallIds.add(id);
+            }
+          } else {
+            delete cloned.message.toolCalls;
+            if (!hasMeaningfulAssistantContent(cloned.message.content)) {
+              continue;
+            }
+          }
+        }
+      }
       result.push(attachAcpTagToEntry(cloned, coreMsg.text));
       continue;
     }
 
-    // 兜底：若 kernel 注入了合成提示或非原始条目，直接作为 user/system 文本透传。
-    if (coreMsg.role === "system" || coreMsg.role === "user" || coreMsg.role === "assistant") {
+    // 兜底：若 kernel 注入了合成提示或非原始条目，仅透传文本消息，避免未匹配的工具块降级为纯文本。
+    if (
+      coreMsg.contentType !== "tool-call" &&
+      coreMsg.contentType !== "tool-result" &&
+      (coreMsg.role === "system" || coreMsg.role === "user" || coreMsg.role === "assistant")
+    ) {
       result.push({
         message: {
           role: coreMsg.role,
