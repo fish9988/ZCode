@@ -1,4 +1,5 @@
 export * from "./contract.js";
+export * from "./dsh-compact.js";
 export { createAcpSessionController } from "./acp-session-controller.js";
 export {
   ACP_CONTEXT_TOOLS,

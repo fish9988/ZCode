@@ -10,7 +10,15 @@ import {
   resolveEffectiveCompressionWindow,
   shouldAutoCompact,
 } from "../src/compact/index.js";
-import { createAcpSessionController } from "../src/context-compression/index.js";
+import {
+  DSH_SUMMARIZATION_SYSTEM_PROMPT,
+  appendDshFileOperationsToSummary,
+  buildDshCompactSummaryRequest,
+  createAcpSessionController,
+  pruneToolResultText,
+  resolveDshSummaryMaxOutputTokens,
+  stripSupermemoryBlocks,
+} from "../src/context-compression/index.js";
 import { selectCompactEntries } from "../src/runtime/helpers/compact-selection.js";
 import type { RuntimeMessageEntry } from "../src/agent/message-history.js";
 import {
@@ -343,14 +351,23 @@ describe("dsh-compact default engine & per-model effective context window", () =
     ).toBe(200_000);
   });
 
-  it("applies 75% threshold in dsh-compact mode against effectiveContextWindow", () => {
+  it("applies 60% default threshold (configurable 30%–95%) in dsh-compact mode against effectiveContextWindow", () => {
     expect(
       getAutoCompactThreshold({
         engine: "dsh-compact",
         contextWindow: 1_000_000,
         effectiveContextWindow: 500_000,
       }),
-    ).toBe(375_000);
+    ).toBe(300_000);
+
+    expect(
+      getAutoCompactThreshold({
+        engine: "dsh-compact",
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 500_000,
+        thresholdRatio: 0.4,
+      }),
+    ).toBe(200_000);
 
     expect(
       getAutoCompactThreshold({
@@ -371,6 +388,108 @@ describe("dsh-compact default engine & per-model effective context window", () =
       expect(decision.shouldCompact).toBe(false);
       expect(decision.reason).toBe("disabled");
     }
+  });
+
+  it("ports pi-dsh-compact head-4096+tail-1024 pruning, supermemory stripping, 8-section prompt, and file tracking", () => {
+    // Unicode code-point safe head+tail pruning (no surrogate pair split)
+    const headPart = "😀".repeat(4096);
+    const midPart = "M".repeat(3000);
+    const tailPart = "T".repeat(1024);
+    const pruned = pruneToolResultText(headPart + midPart + tailPart);
+    expect(pruned.startsWith(headPart)).toBe(true);
+    expect(pruned.endsWith(tailPart)).toBe(true);
+    expect(pruned).toContain("[... tool result middle pruned ...]");
+    expect(pruned).not.toContain(midPart);
+
+    // Supermemory block stripping
+    expect(
+      stripSupermemoryBlocks("请修复压缩<supermemory>\nRetrieved memory noise\n</supermemory>"),
+    ).toBe("请修复压缩");
+
+    // End-to-end DSH summary request construction
+    const longLog = `${"H".repeat(4096)}${"M".repeat(2500)}${"ERR: exit code 1".padStart(1024, "T")}`;
+    const entriesForSummary: RuntimeMessageEntry[] = [
+      {
+        message: { role: "system", content: "agent system prompt should be excluded" },
+        metadata: { source: "context_prefix" },
+      },
+      {
+        message: {
+          role: "user",
+          content:
+            "This session is being continued from a previous conversation that ran out of context. The summary below covers the earlier portion of the conversation.\n\n## Primary Request and Intent\n- Prior goal\n\n<read-files>\nREADME.md\n</read-files>\n<modified-files>\nlegacy.ts\n</modified-files>",
+        },
+        metadata: { source: "legacy_synthetic", compactBoundary: { boundaryId: "cmp_old" } },
+      },
+      {
+        message: {
+          role: "user",
+          content: "Install CPAMP<supermemory>memory noise</supermemory>",
+        },
+      },
+      {
+        message: {
+          role: "assistant",
+          content: [
+            { type: "reasoning", text: "secret internal chain of thought" },
+            { type: "text", text: "Reading files and applying edits" },
+          ],
+          toolCalls: [
+            { id: "tc_1", name: "Read", input: { file_path: "src/config.yaml" } },
+            { id: "tc_2", name: "Read", input: { file_path: "assets/diagram.png" } },
+            { id: "tc_3", name: "Edit", input: { file_path: "src/config.yaml" } },
+            { id: "tc_4", name: "Write", input: { file_path: "scripts/start.cmd" } },
+          ],
+        },
+      },
+      {
+        message: {
+          role: "tool",
+          toolCallId: "tc_1",
+          toolName: "Bash",
+          isError: true,
+          content: longLog,
+        },
+      },
+    ];
+
+    const req = buildDshCompactSummaryRequest({
+      entriesForSummary,
+      customInstructions: "preserve admin key",
+    });
+
+    expect(req.messages[0]).toEqual({ role: "system", content: DSH_SUMMARIZATION_SYSTEM_PROMPT });
+    const userPrompt = req.messages[1].content;
+    expect(userPrompt).toContain("<compacted-summary>\n## Primary Request and Intent\n- Prior goal");
+    expect(userPrompt).toContain("[User]: Install CPAMP");
+    expect(userPrompt).not.toContain("memory noise");
+    expect(userPrompt).not.toContain("secret internal chain of thought");
+    expect(userPrompt).toContain("[Tool result (Bash) [ERROR]]:");
+    expect(userPrompt).toContain("[... tool result middle pruned ...]");
+    expect(userPrompt).toContain("ERR: exit code 1");
+    expect(userPrompt).toContain("## Primary Request and Intent");
+    expect(userPrompt).toContain("## Critical Context");
+    expect(userPrompt).toContain("Additional user focus: preserve admin key");
+
+    // File tracking double-insurance: modified deduplicated out of read, images filtered out, prior files inherited
+    expect(req.fileLists.readFiles).toEqual(["README.md"]);
+    expect(req.fileLists.modifiedFiles).toEqual(["legacy.ts", "scripts/start.cmd", "src/config.yaml"]);
+
+    const finalSummary = appendDshFileOperationsToSummary(
+      "## Primary Request and Intent\n- Install CPAMP",
+      req.fileLists,
+    );
+    expect(finalSummary).toContain("<read-files>\nREADME.md\n</read-files>");
+    expect(finalSummary).toContain(
+      "<modified-files>\nlegacy.ts\nscripts/start.cmd\nsrc/config.yaml\n</modified-files>",
+    );
+    // Idempotent if already appended
+    expect(appendDshFileOperationsToSummary(finalSummary, req.fileLists)).toBe(finalSummary);
+
+    // Output token cap matches pi-dsh-compact
+    expect(resolveDshSummaryMaxOutputTokens(65_536)).toBe(32_768);
+    expect(resolveDshSummaryMaxOutputTokens(8_192)).toBe(8_192);
+    expect(resolveDshSummaryMaxOutputTokens(undefined)).toBe(16_384);
   });
 
   it("retains ~20% trailing rounds in dsh-compact without splitting tool pairs", () => {

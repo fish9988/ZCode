@@ -719,7 +719,7 @@ describe("Pi-style thinking level profiles, CEL round-trip, and smart inference"
       contextCompression: {
         engine: "billion-context",
         defaultEffectiveContextWindow: 500_000,
-        thresholdRatio: 0.75,
+        thresholdRatio: 0.6,
         retainRatio: 0.2,
         biliMinContextLimitPct: 0.45,
         biliMaxContextLimitPct: 0.75,
@@ -729,9 +729,13 @@ describe("Pi-style thinking level profiles, CEL round-trip, and smart inference"
     expect(full.contextCompression).toMatchObject({
       engine: "billion-context",
       defaultEffectiveContextWindow: 500_000,
-      thresholdRatio: 0.75,
+      thresholdRatio: 0.6,
       retainRatio: 0.2,
     });
+    expect(
+      appSettingsPatchSchema.parse({ contextCompression: { thresholdRatio: 0.4 } })
+        .contextCompression?.thresholdRatio,
+    ).toBe(0.4);
 
     const modelCfg = ModelConfig.fromData({
       enabled: true,

@@ -240,11 +240,11 @@ export function ContextCompressionSettings() {
                     {intl.formatMessage({ id: "settings.contextCompression.thresholdRatio" })}
                   </span>
                   <NumericSettingInput
-                    value={Math.round((current.thresholdRatio ?? 0.75) * 100)}
+                    value={Math.round((current.thresholdRatio ?? 0.6) * 100)}
                     suffix="%"
                     disabled={saving}
                     onCommit={(raw) => {
-                      const ratio = parsePercent(raw, 0.5, 0.95);
+                      const ratio = parsePercent(raw, 0.3, 0.95);
                       if (ratio !== null) void patchCompression({ thresholdRatio: ratio });
                     }}
                   />

@@ -79,7 +79,7 @@ export interface ContextCompressionSettings {
   engine?: ContextCompressionEngineMode;
   /** 全局默认有效压缩窗口上限（token）；单模型未单独设置 effectiveContextWindow 时生效，null 表示不限制。 */
   defaultEffectiveContextWindow?: number | null;
-  /** dsh-compact：达到有效窗口的比例时触发自动压缩（0.50–0.95，默认 0.75）。 */
+  /** dsh-compact（移植自 pi-dsh-compact）：达到有效窗口的比例时触发自动压缩（0.30–0.95，默认 0.60）。 */
   thresholdRatio?: number;
   /** dsh-compact：压缩后保留最近上下文的比例（0.05–0.50，默认 0.20）。 */
   retainRatio?: number;

@@ -3,6 +3,12 @@ import {
   resolveDshCompactRatios,
   resolveEffectiveCompressionWindow,
 } from "../../compact/policy.js";
+import {
+  appendDshFileOperationsToSummary,
+  buildDshCompactSummaryRequest,
+  resolveDshSummaryMaxOutputTokens,
+  type DshCompactSummaryRequest,
+} from "../../context-compression/dsh-compact.js";
 import { buildToolSearchAnnouncement } from "../../tool/search/exposure.js";
 import {
   prepareRuntimeProviderRequest,
@@ -16,9 +22,11 @@ import {
   CompactReason,
   CompactTrigger,
   CompactTimelineStatus,
+  CoreErrorType,
   MAX_OUTPUT_TOKENS_FOR_SUMMARY,
   SessionEventType,
   createChildTraceContext,
+  createCoreError,
   isCoreError,
   createMessageId,
   createPartId,
@@ -310,12 +318,12 @@ async function compactActiveConversationImpl(
           querySource: "compact",
         },
       });
-      const compactPrompt = buildCompactPrompt(customInstructions);
+      const isDshCompact = this.config.compact?.engine === "dsh-compact";
+      const compactPrompt = isDshCompact ? "" : buildCompactPrompt(customInstructions);
       let result: RuntimeModelTextResult;
       let summary!: string;
       let compactPromptTooLongAttempts = 0;
       let stripMediaForSummary = false;
-      let toolFreeSummaryFallback = false;
       const reselectEntriesAfterPromptTooLong = (cause: unknown): boolean => {
         const reselected = selectCompactEntriesAfterPromptTooLong({
           currentGroupsPreserved: currentSelection.groupsPreserved,
@@ -353,70 +361,89 @@ async function compactActiveConversationImpl(
       };
 
       while (true) {
-        const prepared = prepareRuntimeProviderRequest(this, {
-          model: compactModel,
-          tools: toolFreeSummaryFallback ? [] : compactCandidates,
-          registry,
-          // 已发现工具按本次请求的消息计算：只在保留段里发现的工具不发送。
-          entries: entriesForSummary,
-          prompt: compactPrompt,
-          applyCacheControl: !toolFreeSummaryFallback,
-          skipCacheWrite: true,
-        });
-        const requestMessages = toolFreeSummaryFallback
-          ? prepared.request.messages.filter((msg) => msg.role !== "system")
-          : prepared.request.messages;
-        const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
-        const recordableRequestMessages =
-          recordableEntries === prepared.entries
-            ? requestMessages
-            : buildCompactSummaryRequestMessages(recordableEntries, compactPrompt, {
-                useMidConversationSystem,
-                ...requestCapabilityProjectionOptions(compactModel),
-                loadedToolCallIds: prepared.loadedToolCallIds,
-              });
-        // Compact 曾只执行 capability projection，漏掉普通 turn 共用的聚合
-        // 媒体预算；统一走模型媒体策略，避免 summary 请求绕过全局请求上限。
-        const mediaPolicyProjection = projectMessagesForModelMediaPolicy(
-          requestMessages,
-          compactModel.properties.inputFormat,
-        );
-        logMediaCapabilityProjection(
-          this.logger,
-          modelTraceContext,
-          mediaPolicyProjection.capabilityProjection,
-          {
-            event: "compact.request.media_capability_projection",
-            message: "Compact request media capability projection",
-            model: `${compactModel.providerId}/${compactModel.modelId}`,
-          },
-        );
-        logMediaBudgetProjection(
-          this.logger,
-          modelTraceContext,
-          mediaPolicyProjection.mediaBudgetProjection,
-          {
-            event: "compact.request.media_projection",
-            message: "Compact request media budget projection",
-          },
-        );
-        let projectedRequestMessages = mediaPolicyProjection.messages;
-        let projectedRecordableMessages =
-          recordableRequestMessages === requestMessages
-            ? projectedRequestMessages
-            : projectMessagesForModelMediaPolicy(
-                recordableRequestMessages,
-                compactModel.properties.inputFormat,
-              ).messages;
-        if (stripMediaForSummary) {
-          // 复用通用 media budget 文案会污染 summary 的 provider-visible 内容。
-          const mediaProjection = projectCompactMediaForRetry(projectedRequestMessages);
-          projectedRequestMessages = mediaProjection.messages;
+        let dshRequest: DshCompactSummaryRequest | undefined;
+        let projectedRequestMessages: Parameters<Model["generateText"]>[0]["messages"];
+        let projectedRecordableMessages: Parameters<Model["generateText"]>[0]["messages"];
+        let requestTools: ModelToolContract[];
+        let requestToolSearchEnabled: boolean | undefined;
+
+        if (isDshCompact) {
+          // 移植自 pi-dsh-compact：序列化待压缩消息（头 4096 + 尾 1024 工具裁剪、剥离 <supermemory>、
+          // 忽略 thinking），以独立无工具的 DSH 8 章节检查点请求发送。
+          dshRequest = buildDshCompactSummaryRequest({
+            entriesForSummary,
+            customInstructions,
+          });
+          projectedRequestMessages = dshRequest.messages;
+          projectedRecordableMessages = dshRequest.messages;
+          requestTools = [];
+          requestToolSearchEnabled = false;
+        } else {
+          const prepared = prepareRuntimeProviderRequest(this, {
+            model: compactModel,
+            tools: compactCandidates,
+            registry,
+            // 已发现工具按本次请求的消息计算：只在保留段里发现的工具不发送。
+            entries: entriesForSummary,
+            prompt: compactPrompt,
+            applyCacheControl: true,
+            skipCacheWrite: true,
+          });
+          const requestMessages = prepared.request.messages;
+          const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
+          const recordableRequestMessages =
+            recordableEntries === prepared.entries
+              ? requestMessages
+              : buildCompactSummaryRequestMessages(recordableEntries, compactPrompt, {
+                  useMidConversationSystem,
+                  ...requestCapabilityProjectionOptions(compactModel),
+                  loadedToolCallIds: prepared.loadedToolCallIds,
+                });
+          // Compact 曾只执行 capability projection，漏掉普通 turn 共用的聚合
+          // 媒体预算；统一走模型媒体策略，避免 summary 请求绕过全局请求上限。
+          const mediaPolicyProjection = projectMessagesForModelMediaPolicy(
+            requestMessages,
+            compactModel.properties.inputFormat,
+          );
+          logMediaCapabilityProjection(
+            this.logger,
+            modelTraceContext,
+            mediaPolicyProjection.capabilityProjection,
+            {
+              event: "compact.request.media_capability_projection",
+              message: "Compact request media capability projection",
+              model: `${compactModel.providerId}/${compactModel.modelId}`,
+            },
+          );
+          logMediaBudgetProjection(
+            this.logger,
+            modelTraceContext,
+            mediaPolicyProjection.mediaBudgetProjection,
+            {
+              event: "compact.request.media_projection",
+              message: "Compact request media budget projection",
+            },
+          );
+          projectedRequestMessages = mediaPolicyProjection.messages;
           projectedRecordableMessages =
             recordableRequestMessages === requestMessages
               ? projectedRequestMessages
-              : projectCompactMediaForRetry(projectedRecordableMessages).messages;
-          logCompactMediaRetryProjection(this.logger, modelTraceContext, mediaProjection);
+              : projectMessagesForModelMediaPolicy(
+                  recordableRequestMessages,
+                  compactModel.properties.inputFormat,
+                ).messages;
+          if (stripMediaForSummary) {
+            // 复用通用 media budget 文案会污染 summary 的 provider-visible 内容。
+            const mediaProjection = projectCompactMediaForRetry(projectedRequestMessages);
+            projectedRequestMessages = mediaProjection.messages;
+            projectedRecordableMessages =
+              recordableRequestMessages === requestMessages
+                ? projectedRequestMessages
+                : projectCompactMediaForRetry(projectedRecordableMessages).messages;
+            logCompactMediaRetryProjection(this.logger, modelTraceContext, mediaProjection);
+          }
+          requestTools = prepared.request.tools;
+          requestToolSearchEnabled = prepared.request.toolSearchEnabled;
         }
 
         const modelRequestEvent = this.createEvent(
@@ -428,7 +455,7 @@ async function compactActiveConversationImpl(
             providerId: String(compactModel.providerId),
             modelId: String(compactModel.modelId),
             querySource: "compact",
-            toolCount: prepared.request.tools.length,
+            toolCount: requestTools.length,
             compactPromptTooLongRetry: compactPromptTooLongAttempts,
           },
           modelTraceContext,
@@ -437,7 +464,9 @@ async function compactActiveConversationImpl(
         events.push(modelRequestEvent);
         const modelStartedAt = Date.now();
         const networkEventStartIndex = events.length;
-        const compactSummaryMaxOutputTokens = capCompactSummaryMaxOutputTokens(compactModel);
+        const compactSummaryMaxOutputTokens = isDshCompact
+          ? resolveDshSummaryMaxOutputTokens(compactModel.optionSpecs.maxOutputTokens.max)
+          : capCompactSummaryMaxOutputTokens(compactModel);
         using statusSink = this.createModelStatusSink(modelTraceContext, events);
         const compactModelRequest = {
           abortSignal: options.abortSignal,
@@ -457,8 +486,8 @@ async function compactActiveConversationImpl(
           // content block 提交前仍可丢弃并 HTTP fallback，block end 后则禁止任何重放。
           preserveProviderStreamBoundaries: true,
           traceContext: modelTraceContext,
-          tools: prepared.request.tools,
-          toolSearchEnabled: prepared.request.toolSearchEnabled,
+          tools: requestTools,
+          toolSearchEnabled: requestToolSearchEnabled,
           refreshRuntimeHeadersBeforeAttempt: createRefreshRuntimeHeadersBeforeModelAttempt(this, {
             abortSignal: options.abortSignal,
             model: compactModel,
@@ -536,28 +565,19 @@ async function compactActiveConversationImpl(
             preCompactTokenCount,
           });
         }
-        try {
-          summary = formatCompactSummaryOrThrow(this, result);
-          break;
-        } catch (summaryError) {
-          // 借鉴 dsh-compact 空摘要降级：仅在 dsh-compact 模式下，若带 system/tools 的摘要
-          // 返回空文本或意外工具调用，移除 Agent system prompt 与工具定义后降级重试一次。
-          if (this.config.compact?.engine === "dsh-compact" && !toolFreeSummaryFallback) {
-            toolFreeSummaryFallback = true;
-            this.logger?.warn(
-              "Compact summary produced unusable output; retrying once without agent system prompt and tools",
-              {
-                ...traceContextToLogContext(modelTraceContext),
-                errorMessage:
-                  summaryError instanceof Error ? summaryError.message : String(summaryError),
-                event: "compact.request.tool_free_fallback.retry",
-                module: "core.runtime",
-              },
-            );
-            continue;
-          }
-          throw summaryError;
+        if (isDshCompact && result.finishReason.trim().toLowerCase() === "length") {
+          // 对应 pi-dsh-compact：摘要触及 maxTokens 被截断时不得静默写入半截检查点。
+          throw createCoreError(
+            CoreErrorType.ModelError,
+            "DSH Compaction failed: summary hit maxTokens limit and was truncated",
+            { recoverable: true, retryable: true },
+          );
         }
+        summary = formatCompactSummaryOrThrow(this, result);
+        if (dshRequest) {
+          summary = appendDshFileOperationsToSummary(summary, dshRequest.fileLists);
+        }
+        break;
       }
 
       const persistedSummary = summary;

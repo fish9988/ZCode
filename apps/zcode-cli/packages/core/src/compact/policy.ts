@@ -15,7 +15,7 @@ export const MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000;
 export const AUTOCOMPACT_BUFFER_TOKENS = 13_000;
 export const DEFAULT_AUTOCOMPACT_THRESHOLD_PERCENT = 100;
 export const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3;
-export const DEFAULT_DSH_COMPACT_THRESHOLD_RATIO = 0.75;
+export const DEFAULT_DSH_COMPACT_THRESHOLD_RATIO = 0.6;
 export const DEFAULT_DSH_COMPACT_RETAIN_RATIO = 0.2;
 
 export interface BillionContextRuntimeConfig {
@@ -41,7 +41,7 @@ export interface AutoCompactPolicyConfig {
   summaryReserveTokens?: number;
   bufferTokens?: number;
   thresholdPercentOverride?: number;
-  /** dsh-compact 触发比例（0.50–0.95，默认 0.75）。 */
+  /** dsh-compact 触发比例（0.30–0.95，默认 0.60，对应 pi-dsh-compact）。 */
   thresholdRatio?: number;
   /** dsh-compact 保留最近上下文比例（0.05–0.50，默认 0.20）。 */
   retainRatio?: number;
@@ -117,7 +117,7 @@ export function resolveDshCompactRatios(config: AutoCompactPolicyConfig = {}): {
   const thresholdRatio = clampRatio(
     config.thresholdRatio,
     DEFAULT_DSH_COMPACT_THRESHOLD_RATIO,
-    0.5,
+    0.3,
     0.95,
   );
   const rawRetain = clampRatio(config.retainRatio, DEFAULT_DSH_COMPACT_RETAIN_RATIO, 0.05, 0.5);

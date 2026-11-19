@@ -537,7 +537,7 @@ export const contextCompressionEngineModeSchema = z.enum([
 
 export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS = {
   engine: "dsh-compact" as const,
-  thresholdRatio: 0.75,
+  thresholdRatio: 0.6,
   retainRatio: 0.2,
   recoverOnOverflow: true,
   maxOverflowRetries: 1,
@@ -554,7 +554,7 @@ export const contextCompressionSettingsSchema = z
   .object({
     engine: contextCompressionEngineModeSchema.optional(),
     defaultEffectiveContextWindow: z.number().int().positive().nullish(),
-    thresholdRatio: z.number().min(0.5).max(0.95).optional(),
+    thresholdRatio: z.number().min(0.3).max(0.95).optional(),
     retainRatio: z.number().min(0.05).max(0.5).optional(),
     recoverOnOverflow: z.boolean().optional(),
     maxOverflowRetries: z.number().int().min(0).max(2).optional(),
