@@ -21,6 +21,16 @@ import {
   fetchRemoteProviderModels,
   parseRemoteModelsPayload,
 } from "@zcode/services";
+import {
+  THINKING_PRESET_IDS,
+  buildThinkingProfileFromPreset,
+  clampReasoningLevel,
+  compileModelOptionMap,
+  compileThinkingProfileToOptionSpec,
+  inferThinkingProfileForModel,
+  parseOptionSpecToThinkingProfile,
+  type ThinkingProfile,
+} from "@zcode/shared/model-config";
 import { decodeProviderConfigFile } from "@zcode/provider-node";
 
 describe("custom OpenAI Provider E2E seed", () => {
@@ -442,6 +452,262 @@ describe("third-party remote model discovery and batch add", () => {
       settingsService.dispose();
       registryService.dispose();
     }
+  });
+});
+
+describe("Pi-style thinking level profiles, CEL round-trip, and smart inference", () => {
+  it("compiles and round-trips all presets (1 to 7 tiers) and custom wire-name mappings", () => {
+    for (const presetId of THINKING_PRESET_IDS) {
+      const profile = buildThinkingProfileFromPreset(presetId, "openai");
+      const spec = compileThinkingProfileToOptionSpec(profile);
+      const program = compileModelOptionMap(spec.map, "reasoningLevel");
+      for (const value of spec.values) {
+        expect(() => program.evaluate(value)).not.toThrow();
+      }
+      const parsed = parseOptionSpecToThinkingProfile(spec.values, spec.map, "openai-chat-completions");
+      expect(parsed.format).toBe(profile.format);
+      expect(parsed.tiers.map((t) => t.id)).toEqual(profile.tiers.map((t) => t.id));
+    }
+
+    // 3-tier custom names with distinct upstream wire values + omit for "instant"
+    const customProfile: ThinkingProfile = {
+      format: "openai",
+      tiers: [
+        { id: "instant", action: "omit" },
+        { id: "balanced", action: "value", wireValue: "medium" },
+        { id: "deep", action: "value", wireValue: "xhigh" },
+      ],
+    };
+    const customSpec = compileThinkingProfileToOptionSpec(customProfile);
+    const customProgram = compileModelOptionMap(customSpec.map, "reasoningLevel");
+    expect(customProgram.evaluate("instant")).toEqual({});
+    expect(customProgram.evaluate("balanced")).toEqual({ reasoning_effort: "medium" });
+    expect(customProgram.evaluate("deep")).toEqual({ reasoning_effort: "xhigh" });
+
+    const roundTripped = parseOptionSpecToThinkingProfile(
+      customSpec.values,
+      customSpec.map,
+      "openai-chat-completions",
+    );
+    expect(roundTripped).toEqual(customProfile);
+  });
+
+  it("compiles and decompiles every structured thinkingFormat accurately", () => {
+    const cases: { profile: ThinkingProfile; apiType: string; sampleLevel: string; expectedPatch: Record<string, unknown> }[] = [
+      {
+        apiType: "openai-responses",
+        sampleLevel: "xhigh",
+        expectedPatch: { reasoning: { effort: "max" } },
+        profile: {
+          format: "openai-responses",
+          tiers: [
+            { id: "off", action: "omit" },
+            { id: "high", action: "value", wireValue: "high" },
+            { id: "xhigh", action: "value", wireValue: "max" },
+          ],
+        },
+      },
+      {
+        apiType: "openai-chat-completions",
+        sampleLevel: "off",
+        expectedPatch: { reasoning: { enabled: false } },
+        profile: {
+          format: "openrouter",
+          tiers: [
+            { id: "off", action: "disabled" },
+            { id: "high", action: "value", wireValue: "high" },
+          ],
+        },
+      },
+      {
+        apiType: "anthropic-messages",
+        sampleLevel: "xhigh",
+        expectedPatch: { thinking: { type: "adaptive" }, output_config: { effort: "max" } },
+        profile: {
+          format: "anthropic-adaptive",
+          tiers: [
+            { id: "off", action: "disabled" },
+            { id: "low", action: "value", wireValue: "low" },
+            { id: "xhigh", action: "value", wireValue: "max" },
+          ],
+        },
+      },
+      {
+        apiType: "anthropic-messages",
+        sampleLevel: "medium",
+        expectedPatch: { thinking: { type: "enabled", budget_tokens: 10240 } },
+        profile: {
+          format: "anthropic-budget",
+          tiers: [
+            { id: "off", action: "disabled" },
+            { id: "low", action: "budget", budgetTokens: 4096 },
+            { id: "medium", action: "budget", budgetTokens: 10240 },
+          ],
+        },
+      },
+      {
+        apiType: "openai-chat-completions",
+        sampleLevel: "max",
+        expectedPatch: { thinking: { type: "enabled" }, reasoning_effort: "max" },
+        profile: {
+          format: "deepseek",
+          tiers: [
+            { id: "disabled", action: "disabled" },
+            { id: "low", action: "value", wireValue: "low" },
+            { id: "max", action: "value", wireValue: "max" },
+          ],
+        },
+      },
+      {
+        apiType: "openai-chat-completions",
+        sampleLevel: "enabled",
+        expectedPatch: { thinking: { type: "enabled" } },
+        profile: {
+          format: "zai",
+          tiers: [
+            { id: "disabled", action: "disabled" },
+            { id: "enabled", action: "enabled" },
+          ],
+        },
+      },
+      {
+        apiType: "openai-chat-completions",
+        sampleLevel: "high",
+        expectedPatch: { enable_thinking: true, thinking_budget: 24576 },
+        profile: {
+          format: "qwen",
+          tiers: [
+            { id: "off", action: "disabled" },
+            { id: "high", action: "budget", budgetTokens: 24576 },
+          ],
+        },
+      },
+      {
+        apiType: "openai-chat-completions",
+        sampleLevel: "enabled",
+        expectedPatch: { chat_template_kwargs: { enable_thinking: true } },
+        profile: {
+          format: "qwen-chat-template",
+          tiers: [
+            { id: "disabled", action: "disabled" },
+            { id: "enabled", action: "enabled" },
+          ],
+        },
+      },
+    ];
+
+    for (const item of cases) {
+      const spec = compileThinkingProfileToOptionSpec(item.profile);
+      const program = compileModelOptionMap(spec.map, "reasoningLevel");
+      expect(program.evaluate(item.sampleLevel)).toEqual(item.expectedPatch);
+      const parsed = parseOptionSpecToThinkingProfile(spec.values, spec.map, item.apiType);
+      expect(parsed).toEqual(item.profile);
+    }
+
+    // Complex 4-field ZCode default CEL falls back cleanly to custom-cel without losing text
+    const compositeCel =
+      '{ "thinking": { "type": "enabled" }, "enable_thinking": true, "reasoning_effort": reasoningLevel }';
+    const customParsed = parseOptionSpecToThinkingProfile(["disabled", "enabled"], compositeCel, "openai-chat-completions");
+    expect(customParsed.format).toBe("custom-cel");
+    expect(customParsed.customCel).toBe(compositeCel);
+  });
+
+  it("extracts server-advertised reasoning levels and infers real third-party model families", () => {
+    const parsedRemote = parseRemoteModelsPayload({
+      data: [
+        {
+          id: "proxy-custom-1",
+          supported_reasoning_effort: ["none", "medium", "turbo"],
+          supports_reasoning: true,
+        },
+        {
+          id: "openrouter-model",
+          supported_parameters: ["temperature", "reasoning"],
+        },
+      ],
+    });
+    expect(parsedRemote[0]).toMatchObject({
+      id: "proxy-custom-1",
+      reasoningLevels: ["none", "medium", "turbo"],
+      supportsReasoning: true,
+    });
+    expect(parsedRemote[1]).toMatchObject({
+      id: "openrouter-model",
+      supportsReasoning: true,
+    });
+
+    const fromRemote = inferThinkingProfileForModel({
+      modelId: "proxy-custom-1",
+      apiType: "openai-chat-completions",
+      remoteEntry: parsedRemote[0],
+    });
+    expect(fromRemote.source).toBe("remote-metadata");
+    expect(fromRemote.profile?.tiers.map((t) => t.id)).toEqual(["none", "medium", "turbo"]);
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "gpt-5.6-luna", apiType: "openai-chat-completions" })
+        .profile?.tiers.map((t) => t.id),
+    ).toEqual(["none", "low", "medium", "high", "xhigh", "max"]);
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "gemini-4-hydrogen", apiType: "openai-chat-completions" })
+        .profile?.tiers.map((t) => t.id),
+    ).toEqual(["low", "medium", "high", "xhigh"]);
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "gemini-4-neon-xhigh", apiType: "openai-chat-completions" }),
+    ).toMatchObject({
+      source: "model-rule",
+      profile: {
+        format: "openai",
+        tiers: [
+          { id: "low", action: "value", wireValue: "low" },
+          { id: "medium", action: "value", wireValue: "medium" },
+          { id: "high", action: "value", wireValue: "high" },
+          { id: "xhigh", action: "value", wireValue: "xhigh" },
+        ],
+      },
+    });
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "gpt-oss-120b-medium", apiType: "openai-chat-completions" })
+        .profile?.tiers.map((t) => t.id),
+    ).toEqual(["low", "medium", "high"]);
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "claude-sonnet-4-6", apiType: "anthropic-messages" })
+        .profile,
+    ).toMatchObject({
+      format: "anthropic-adaptive",
+      tiers: [
+        { id: "off", action: "disabled" },
+        { id: "low", action: "value", wireValue: "low" },
+        { id: "medium", action: "value", wireValue: "medium" },
+        { id: "high", action: "value", wireValue: "high" },
+        { id: "max", action: "value", wireValue: "max" },
+      ],
+    });
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "qwen3.8-omni-flash", apiType: "openai-chat-completions" })
+        .profile?.tiers.map((t) => t.id),
+    ).toEqual(["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+
+    expect(
+      inferThinkingProfileForModel({ modelId: "gpt-image-1.5", apiType: "openai-chat-completions" }),
+    ).toEqual({
+      source: "non-thinking",
+      profile: { format: "noop", tiers: [{ id: "off", action: "omit" }] },
+    });
+  });
+
+  it("clamps thinking levels across models with different tier counts", () => {
+    expect(clampReasoningLevel("xhigh", ["low", "medium", "high"])).toBe("high");
+    expect(clampReasoningLevel("minimal", ["none", "low", "medium", "high"])).toBe("low");
+    expect(clampReasoningLevel("off", ["disabled", "enabled"])).toBe("disabled");
+    expect(clampReasoningLevel("high", ["disabled", "enabled"])).toBe("enabled");
+    expect(clampReasoningLevel("medium", ["none", "high", "max"])).toBe("high");
+    expect(clampReasoningLevel(undefined, ["low", "high"])).toBe("high");
   });
 });
 

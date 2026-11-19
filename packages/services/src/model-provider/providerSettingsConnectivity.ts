@@ -135,6 +135,66 @@ function asNonEmptyString(value: unknown): string | undefined {
   return trimmed ? trimmed : undefined;
 }
 
+function parseNonEmptyStringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const str = asNonEmptyString(item);
+    if (!str || seen.has(str)) continue;
+    seen.add(str);
+    result.push(str);
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function extractRemoteReasoningMetadata(record: Record<string, unknown>): {
+  readonly reasoningLevels?: readonly string[];
+  readonly supportsReasoning?: boolean;
+} {
+  const reasoningObj =
+    record.reasoning && typeof record.reasoning === "object" && !Array.isArray(record.reasoning)
+      ? (record.reasoning as Record<string, unknown>)
+      : undefined;
+  const thinkingObj =
+    record.thinking && typeof record.thinking === "object" && !Array.isArray(record.thinking)
+      ? (record.thinking as Record<string, unknown>)
+      : undefined;
+
+  const reasoningLevels =
+    parseNonEmptyStringArray(record.supported_reasoning_effort) ??
+    parseNonEmptyStringArray(record.supported_reasoning_efforts) ??
+    parseNonEmptyStringArray(record.reasoning_efforts) ??
+    parseNonEmptyStringArray(record.reasoning_levels) ??
+    parseNonEmptyStringArray(record.thinking_levels) ??
+    parseNonEmptyStringArray(reasoningObj?.levels) ??
+    parseNonEmptyStringArray(reasoningObj?.efforts) ??
+    parseNonEmptyStringArray(thinkingObj?.levels);
+
+  let supportsReasoning: boolean | undefined;
+  if (typeof record.supports_reasoning === "boolean") {
+    supportsReasoning = record.supports_reasoning;
+  } else if (typeof record.reasoning === "boolean") {
+    supportsReasoning = record.reasoning;
+  } else if (typeof reasoningObj?.supported === "boolean") {
+    supportsReasoning = reasoningObj.supported;
+  } else if (typeof thinkingObj?.supported === "boolean") {
+    supportsReasoning = thinkingObj.supported;
+  } else if (Array.isArray(record.supported_parameters)) {
+    const params = record.supported_parameters.map((entry) =>
+      typeof entry === "string" ? entry.toLowerCase() : "",
+    );
+    if (params.includes("reasoning") || params.includes("include_reasoning")) {
+      supportsReasoning = true;
+    }
+  }
+
+  return {
+    ...(reasoningLevels ? { reasoningLevels } : {}),
+    ...(supportsReasoning !== undefined ? { supportsReasoning } : {}),
+  };
+}
+
 export function parseRemoteModelsPayload(payload: unknown): RemoteProviderModelEntry[] {
   const rawList: unknown[] | undefined = Array.isArray(payload)
     ? payload
@@ -188,6 +248,7 @@ export function parseRemoteModelsPayload(payload: unknown): RemoteProviderModelE
         record.output_token_limit ??
         record.outputTokenLimit,
     );
+    const reasoningMetadata = extractRemoteReasoningMetadata(record);
 
     models.push({
       id,
@@ -195,6 +256,7 @@ export function parseRemoteModelsPayload(payload: unknown): RemoteProviderModelE
       ...(ownedBy ? { ownedBy } : {}),
       ...(contextWindow !== undefined ? { contextWindow } : {}),
       ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+      ...reasoningMetadata,
     });
   }
   return models;

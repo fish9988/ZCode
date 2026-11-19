@@ -45,6 +45,7 @@ export function selectFocusedInputText(event: Pick<FocusEvent<HTMLInputElement>,
 
 export function ProviderModelMetadataDialog({
   mode = "edit",
+  providerApiType,
   open,
   draft,
   draftErrorMessage,
@@ -63,6 +64,7 @@ export function ProviderModelMetadataDialog({
   onModelIdBlur,
 }: {
   mode?: "add" | "edit";
+  providerApiType?: string | null;
   open: boolean;
   draft: ProviderModelDraftValues;
   draftErrorMessage: string | null;
@@ -355,6 +357,7 @@ export function ProviderModelMetadataDialog({
               </div>
             </ModelSettingsGroup>
             <ProviderModelReasoningSettings
+              providerApiType={providerApiType}
               draft={draft}
               personalConfig={personalConfig}
               overrideFields={activeOverrides}

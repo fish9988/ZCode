@@ -87,6 +87,10 @@ export interface RemoteProviderModelEntry {
   readonly ownedBy?: string;
   readonly contextWindow?: number;
   readonly maxOutputTokens?: number;
+  /** 服务端显式声明的思考强度档位列表（按从低到高排序）。 */
+  readonly reasoningLevels?: readonly string[];
+  /** 服务端显式声明是否支持思考/推理模式。 */
+  readonly supportsReasoning?: boolean;
 }
 
 /** 从第三方供应商拉取模型列表的返回结果。 */

@@ -4,6 +4,8 @@ import { useModelSelectionServiceView } from "@/hooks/useModelSelectionView.js";
 import { useServices } from "@/hooks/useServices.js";
 import { useSettings } from "@/hooks/useSettingService.js";
 import { isOfficialPlanProvider, type ModelSelection } from "@zcode/shared";
+import { clampReasoningLevel } from "@zcode/shared/model-config";
+import { thoughtLevelLabelId } from "@/chat-input-toolbar/thoughtLevelLabels.js";
 import {
   TID_SETTINGS_DEFAULT_MODEL_REASONING_TRIGGER,
   TID_SETTINGS_DEFAULT_MODEL_TRIGGER,
@@ -98,7 +100,10 @@ export function DefaultModelAndOfficialPlanBar() {
     const provider = providers.find((p) => p.providerId === decoded.providerId);
     const model = provider?.models.find((m) => m.modelId === decoded.modelName);
     const levels = model?.config.optionSpecs.reasoningLevel.values ?? [];
-    const reasoningLevel = levels.at(-1);
+    const reasoningLevel = clampReasoningLevel(
+      configuredDefault?.options?.reasoningLevel,
+      levels,
+    );
 
     const nextSelection: ModelSelection = {
       providerId: decoded.providerId,
@@ -254,11 +259,15 @@ export function DefaultModelAndOfficialPlanBar() {
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {reasoningLevels.map((level) => (
-                    <SelectItem key={level} value={level}>
-                      {level}
-                    </SelectItem>
-                  ))}
+                  {reasoningLevels.map((level) => {
+                    const labelId = thoughtLevelLabelId(level);
+                    const displayLabel = labelId ? intl.formatMessage({ id: labelId }) : level;
+                    return (
+                      <SelectItem key={level} value={level}>
+                        {displayLabel}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             ) : null}

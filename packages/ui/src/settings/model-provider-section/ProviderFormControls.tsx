@@ -17,6 +17,7 @@ export function ModelRowInput({
   model,
   providerId,
   providerName = providerId,
+  providerApiType,
   providerEnabled = true,
   providerAccess,
   inputTestId,
@@ -31,6 +32,7 @@ export function ModelRowInput({
   model: ProviderSettingsFormModel;
   providerId: string;
   providerName?: string;
+  providerApiType?: string | null;
   providerEnabled?: boolean;
   providerAccess?: ProviderConfigObject["access"];
   inputTestId?: string;
@@ -241,6 +243,21 @@ export function ModelRowInput({
     { id: "settings.modelProvider.contextWindowBadgeLabel" },
     { value: contextWindowLabel },
   );
+  const reasoningValues = model.config.optionSpecs?.reasoningLevel?.values ?? [];
+  const reasoningBadgeLabel =
+    reasoningValues.length === 1
+      ? intl.formatMessage(
+          { id: "settings.modelProvider.reasoningFixedBadge" },
+          { level: reasoningValues[0]! },
+        )
+      : reasoningValues.length > 1
+        ? intl.formatMessage(
+            { id: "settings.modelProvider.reasoningTiersBadge" },
+            { count: reasoningValues.length },
+          )
+        : null;
+  const reasoningBadgeTitle =
+    reasoningValues.length > 0 ? reasoningValues.join(" / ") : undefined;
 
   return (
     <div className="space-y-2 px-3 py-2">
@@ -259,6 +276,14 @@ export function ModelRowInput({
           >
             {contextWindowLabel}
           </span>
+          {reasoningBadgeLabel ? (
+            <span
+              className="inline-flex h-5 max-w-28 shrink-0 items-center truncate rounded-md border border-border bg-surface px-1.5 font-mono text-ui-xs text-foreground-subtle"
+              title={reasoningBadgeTitle}
+            >
+              {reasoningBadgeLabel}
+            </span>
+          ) : null}
           {shouldShowModelVisionBadge(
             model.modelId,
             model.config.properties?.inputFormat?.supportsImage,
@@ -298,6 +323,7 @@ export function ModelRowInput({
               );
           }}
           mode="edit"
+          providerApiType={providerApiType}
           open={metadataDialogOpen}
           draft={draft}
           draftErrorMessage={draftErrorMessage}

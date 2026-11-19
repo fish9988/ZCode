@@ -21,6 +21,8 @@ const THOUGHT_LEVEL_LABEL_IDS: Record<string, string> = {
   xhigh: "chat.toolbar.thoughtLevel.value.xhigh",
   max: "chat.toolbar.thoughtLevel.value.max",
   ultra: "chat.toolbar.thoughtLevel.value.ultra",
+  adaptive: "chat.toolbar.thoughtLevel.value.adaptive",
+  auto: "chat.toolbar.thoughtLevel.value.auto",
 };
 
 /**

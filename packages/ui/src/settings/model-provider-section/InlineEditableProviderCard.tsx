@@ -14,6 +14,7 @@ import type {
   BatchAddPersonalModelInput,
   FetchRemoteProviderModelsInput,
 } from "@zcode/services";
+import type { FetchRemoteModelImportItem } from "@/custom-appearance/index.js";
 import {
   isApiKeyAccess,
   type ProviderApiType,
@@ -759,27 +760,36 @@ export function InlineEditableProviderCard({
   }, [commitPendingDraft, intl, onFetchRemoteModels, provider.providerId]);
 
   const handleAddModels = useCallback(
-    async (modelIds: readonly string[]) => {
-      const uniqueIds = [...new Set(modelIds.map((id) => id.trim()).filter(Boolean))];
-      if (uniqueIds.length === 0) return;
+    async (items: readonly FetchRemoteModelImportItem[]) => {
+      const normalizedItems: BatchAddPersonalModelInput[] = [];
+      const seenIds = new Set<string>();
+      for (const item of items) {
+        const modelId = item.modelId.trim();
+        if (!modelId || seenIds.has(modelId)) continue;
+        seenIds.add(modelId);
+        normalizedItems.push({
+          modelId,
+          config: structuredClone(item.config),
+          useRecommendedConfig: item.useRecommendedConfig,
+        });
+      }
+      if (normalizedItems.length === 0) return;
       await runSaveOperation(
         async () => {
           if (onAddPersonalModels) {
-            await onAddPersonalModels(
-              provider.providerId,
-              uniqueIds.map((modelId) => ({
-                modelId,
-                config: {},
-                useRecommendedConfig: true,
-              })),
-            );
+            await onAddPersonalModels(provider.providerId, normalizedItems);
             return;
           }
           if (!onAddPersonalModel) {
             throw new Error("当前设置入口未装配 Personal Model 添加能力");
           }
-          for (const modelId of uniqueIds) {
-            await onAddPersonalModel(provider.providerId, modelId, {}, true);
+          for (const item of normalizedItems) {
+            await onAddPersonalModel(
+              provider.providerId,
+              item.modelId,
+              item.config ?? {},
+              item.useRecommendedConfig,
+            );
           }
         },
         { draftOwnsRetry: true },
@@ -788,7 +798,7 @@ export function InlineEditableProviderCard({
         key: `provider-fetch-models:${provider.providerId}`,
         message: intl.formatMessage(
           { id: "settings.modelProvider.fetchModelsSuccess" },
-          { count: uniqueIds.length },
+          { count: normalizedItems.length },
         ),
         state: "success",
         successEmphasis: true,
@@ -924,6 +934,8 @@ export function InlineEditableProviderCard({
           key={provider.providerId}
           providerId={provider.providerId}
           providerName={getProviderFormLabel(provider)}
+          providerApiType={apiFormat}
+          providerBaseUrl={baseUrlValue}
           providerEnabled={provider.enabled}
           providerAccess={provider.config.access}
           models={models}

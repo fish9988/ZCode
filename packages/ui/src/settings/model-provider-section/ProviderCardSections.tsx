@@ -60,7 +60,10 @@ import {
 import { SortableProviderModelList } from "@/settings/model-provider-section/SortableProviderModelList.js";
 import { useProviderModelDraft } from "@/settings/model-provider-section/useProviderModelDraft.js";
 import { ProviderLogo } from "@/settings/model-provider-section/ProviderLogo.js";
-import { FetchRemoteModelsDialog } from "@/custom-appearance/index.js";
+import {
+  FetchRemoteModelsDialog,
+  type FetchRemoteModelImportItem,
+} from "@/custom-appearance/index.js";
 import type { ProviderConfigObject } from "@zcode/provider";
 
 export {
@@ -364,6 +367,8 @@ function createEmptyModel(): ProviderSettingsFormModel {
 export function ProviderModelsSection({
   providerId,
   providerName,
+  providerApiType,
+  providerBaseUrl,
   providerEnabled = true,
   providerAccess,
   models,
@@ -379,6 +384,8 @@ export function ProviderModelsSection({
 }: {
   providerId: string;
   providerName?: string;
+  providerApiType?: string | null;
+  providerBaseUrl?: string | null;
   providerEnabled?: boolean;
   providerAccess?: ProviderConfigObject["access"];
   models: ProviderSettingsFormModel[];
@@ -391,7 +398,7 @@ export function ProviderModelsSection({
   onDeleteModel: (modelId: string) => void;
   onModelEnabledChange?: (modelId: string, enabled: boolean) => void | Promise<void>;
   onAddModel: (model: ProviderSettingsFormModel) => void | Promise<void>;
-  onAddModels?: (modelIds: readonly string[]) => void | Promise<void>;
+  onAddModels?: (items: readonly FetchRemoteModelImportItem[]) => void | Promise<void>;
   onFetchModels?: () => Promise<FetchRemoteProviderModelsResult>;
   onReorderModelIds?: (modelIds: string[]) => void;
   settingsRevision?: number;
@@ -537,13 +544,13 @@ export function ProviderModelsSection({
   );
 
   const handleConfirmFetchModels = useCallback(
-    async (modelIds: readonly string[]) => {
-      if (fetchSaving || modelIds.length === 0) return;
+    async (items: readonly FetchRemoteModelImportItem[]) => {
+      if (fetchSaving || items.length === 0) return;
       setFetchSaving(true);
       setFetchError(null);
       try {
         if (onAddModels) {
-          await onAddModels(modelIds);
+          await onAddModels(items);
         }
         setFetchDialogOpen(false);
       } catch (error) {
@@ -612,6 +619,7 @@ export function ProviderModelsSection({
                     key={`${providerId}/${model.modelId}`}
                     providerId={providerId}
                     providerName={providerName}
+                    providerApiType={providerApiType}
                     providerEnabled={providerEnabled}
                     providerAccess={providerAccess}
                     inputTestId={testId(TID_MODEL_PROVIDER_MODEL_INPUT, String(index))}
@@ -666,6 +674,7 @@ export function ProviderModelsSection({
               );
           }}
           mode="add"
+          providerApiType={providerApiType}
           open={addDialogOpen}
           draft={addDraft}
           draftErrorMessage={addCommitError ?? addDraftErrorMessage}
@@ -690,6 +699,8 @@ export function ProviderModelsSection({
             saving={fetchSaving}
             error={fetchError}
             endpointUrl={fetchResult?.endpointUrl ?? null}
+            apiType={providerApiType}
+            baseUrl={providerBaseUrl}
             models={fetchResult?.models ?? []}
             existingModelIds={existingModelIds}
             onRetry={() => void runFetchModels()}
