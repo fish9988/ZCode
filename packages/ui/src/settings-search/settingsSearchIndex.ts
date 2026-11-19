@@ -174,6 +174,18 @@ export const SETTINGS_SEARCH_ITEMS = [
     description: "settings.messageStreamShowTodosDescription",
     visibility: "all",
   },
+  {
+    id: "settings.contextCompression",
+    section: "agentBehavior",
+    description: "settings.contextCompression.engineDescription",
+    visibility: "all",
+  },
+  {
+    id: "settings.contextCompression.defaultEffectiveWindow",
+    section: "agentBehavior",
+    description: "settings.contextCompression.defaultEffectiveWindowDescription",
+    visibility: "all",
+  },
   // 模型设置分区顶部四行（docs/ui/default-model-and-subscription-ui.md）。
   {
     id: "settings.defaultModel",

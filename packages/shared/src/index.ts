@@ -14,6 +14,8 @@ export type {
   FileWatchEvent,
   WorkspaceFileEntry,
   SystemInfo,
+  ContextCompressionEngineMode,
+  ContextCompressionSettings,
   AppSettings,
   ElectronReleaseChannel,
   IntegratedTerminalShellDialect,

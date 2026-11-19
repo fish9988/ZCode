@@ -33,6 +33,7 @@ import {
   SelectValue,
 } from "@/components/ui/select.js";
 import { Switch } from "@/components/ui/switch.js";
+import { ContextCompressionSettings } from "@/custom-appearance/index.js";
 import { Input } from "@/components/ui/input.js";
 import { Button } from "@/components/ui/button.js";
 import { SettingsGroupCard, SettingsRow } from "@/settings/SettingsPageParts.js";
@@ -988,6 +989,7 @@ export function AgentBehaviorSectionContent({
           }
         />
       </SettingsGroupCard>
+      <ContextCompressionSettings />
     </div>
   );
 }

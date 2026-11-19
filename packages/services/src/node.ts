@@ -2700,6 +2700,9 @@ export function createLocalServices(options: {
               toolSearchMode: settings.toolSearchMode ?? DEFAULT_APP_TOOL_SEARCH_MODE,
               memoryEnabled: settings.memoryEnabled === true,
               modelContextBudgetStrategy,
+              ...(settings.contextCompression
+                ? { contextCompression: settings.contextCompression }
+                : {}),
               // user-execution 只消费 Shell；共享默认策略是统一 result schema 的兼容占位，
               // 不会覆盖 runtime-materialization 阶段已经固定的 strategy。
               ...(scope === "user-execution" && settings.integratedTerminalShell

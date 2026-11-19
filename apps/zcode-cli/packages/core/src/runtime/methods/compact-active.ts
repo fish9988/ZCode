@@ -1,4 +1,8 @@
 import type { ModelToolContract } from "@zcode/contracts";
+import {
+  resolveDshCompactRatios,
+  resolveEffectiveCompressionWindow,
+} from "../../compact/policy.js";
 import { buildToolSearchAnnouncement } from "../../tool/search/exposure.js";
 import {
   prepareRuntimeProviderRequest,
@@ -216,9 +220,20 @@ async function compactActiveConversationImpl(
     ...(options.activeEntries ?? this.messageHistory.borrowReadOnlyRuntimeEntries()),
   ];
   const useMidConversationSystem = shouldUseMidConversationSystem(this.config, compactModel);
+  const dshRetainBudgetTokens =
+    this.config.compact?.engine === "dsh-compact" && trigger !== CompactTrigger.Manual
+      ? Math.floor(
+          resolveEffectiveCompressionWindow({
+            contextWindow: compactModel.properties.contextWindow,
+            effectiveContextWindow: compactModel.properties.effectiveContextWindow,
+            defaultEffectiveContextWindow: this.config.compact?.defaultEffectiveContextWindow,
+          }) * resolveDshCompactRatios(this.config.compact).retainRatio,
+        )
+      : undefined;
   const initialSelection = selectInitialCompactEntriesForActiveConversation({
     activeEntries,
     initialPromptTooLongCause: options.initialPromptTooLongCause,
+    retainBudgetTokens: dshRetainBudgetTokens,
     trigger,
     useMidConversationSystem,
   });
@@ -297,8 +312,10 @@ async function compactActiveConversationImpl(
       });
       const compactPrompt = buildCompactPrompt(customInstructions);
       let result: RuntimeModelTextResult;
+      let summary!: string;
       let compactPromptTooLongAttempts = 0;
       let stripMediaForSummary = false;
+      let toolFreeSummaryFallback = false;
       const reselectEntriesAfterPromptTooLong = (cause: unknown): boolean => {
         const reselected = selectCompactEntriesAfterPromptTooLong({
           currentGroupsPreserved: currentSelection.groupsPreserved,
@@ -338,15 +355,17 @@ async function compactActiveConversationImpl(
       while (true) {
         const prepared = prepareRuntimeProviderRequest(this, {
           model: compactModel,
-          tools: compactCandidates,
+          tools: toolFreeSummaryFallback ? [] : compactCandidates,
           registry,
           // 已发现工具按本次请求的消息计算：只在保留段里发现的工具不发送。
           entries: entriesForSummary,
           prompt: compactPrompt,
-          applyCacheControl: true,
+          applyCacheControl: !toolFreeSummaryFallback,
           skipCacheWrite: true,
         });
-        const requestMessages = prepared.request.messages;
+        const requestMessages = toolFreeSummaryFallback
+          ? prepared.request.messages.filter((msg) => msg.role !== "system")
+          : prepared.request.messages;
         const recordableEntries = filterOutputTokenContinuationEntries(prepared.entries);
         const recordableRequestMessages =
           recordableEntries === prepared.entries
@@ -517,10 +536,30 @@ async function compactActiveConversationImpl(
             preCompactTokenCount,
           });
         }
-        break;
+        try {
+          summary = formatCompactSummaryOrThrow(this, result);
+          break;
+        } catch (summaryError) {
+          // 借鉴 dsh-compact 空摘要降级：仅在 dsh-compact 模式下，若带 system/tools 的摘要
+          // 返回空文本或意外工具调用，移除 Agent system prompt 与工具定义后降级重试一次。
+          if (this.config.compact?.engine === "dsh-compact" && !toolFreeSummaryFallback) {
+            toolFreeSummaryFallback = true;
+            this.logger?.warn(
+              "Compact summary produced unusable output; retrying once without agent system prompt and tools",
+              {
+                ...traceContextToLogContext(modelTraceContext),
+                errorMessage:
+                  summaryError instanceof Error ? summaryError.message : String(summaryError),
+                event: "compact.request.tool_free_fallback.retry",
+                module: "core.runtime",
+              },
+            );
+            continue;
+          }
+          throw summaryError;
+        }
       }
 
-      const summary = formatCompactSummaryOrThrow(this, result);
       const persistedSummary = summary;
       // 修复原因：文件恢复曾用读取状态里缓存的视图，补回的可能是旧内容或片段；现在重读当前文件。
       // plan 文件、补回文件和指令文件互不依赖，并行读取。
@@ -840,12 +879,15 @@ function canUseCompactSummaryTruncationFallback(trigger: CompactTrigger): boolea
 function selectInitialCompactEntriesForActiveConversation(input: {
   activeEntries: readonly RuntimeMessageEntry[];
   initialPromptTooLongCause?: unknown;
+  retainBudgetTokens?: number;
   trigger: CompactTrigger;
   useMidConversationSystem?: boolean;
 }) {
   const baseSelection = selectCompactEntries({
     entries: input.activeEntries,
+    retainBudgetTokens: input.retainBudgetTokens,
     trigger: input.trigger,
+    useMidConversationSystem: input.useMidConversationSystem,
   });
   if (input.initialPromptTooLongCause === undefined) {
     return baseSelection;

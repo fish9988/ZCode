@@ -13,9 +13,11 @@ import {
   CompactPhase,
   CompactReason,
   createMessageId,
+  estimateMessageTokens,
   traceContextToLogContext,
   TurnMachineImpl,
 } from "../deps.js";
+import { buildProviderUsageTokenOverride } from "./compact.js";
 import {
   buildRuntimeModeReminderBodyForTask,
   buildPlanModeExitReminderBody,
@@ -187,7 +189,31 @@ export async function runRegularTurnLoop(
       state.turnTraceContext,
       state.turnAbortSignal,
     );
-    const requestEntries = [...state.turnRequestState.entries];
+    let requestEntries = [...state.turnRequestState.entries];
+    if (this.acpSessionController?.isEnabled() && this.config.taskType !== "subagent_child") {
+      const preProjection = buildRuntimeProviderRequestMessages(this, {
+        entries: requestEntries,
+        applyCacheControl: false,
+        model: state.model,
+      });
+      const usageOverride = buildProviderUsageTokenOverride(
+        preProjection.messages,
+        preProjection.sourceEntries,
+      );
+      const tokenCount =
+        usageOverride?.tokenCount ?? estimateMessageTokens(preProjection.messages);
+      const acpProjected = await this.acpSessionController.prepareTurnEntries(
+        {
+          entries: requestEntries,
+          model: state.model,
+          compactConfig: this.config.compact,
+          tokenCount,
+          tokenCountSource: usageOverride ? "usage" : "estimate",
+        },
+        this.sessionStore,
+      );
+      requestEntries = acpProjected.entries;
+    }
     const prepared = prepareRuntimeProviderRequest(this, {
       model: state.model,
       tools,

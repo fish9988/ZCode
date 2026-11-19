@@ -38,6 +38,7 @@ export { conversationQuoteSchema, conversationQuotesSchema } from "../conversati
 import { z } from "zod";
 import { accountProviderUnavailableReasonSchema } from "../account-provider-state.js";
 import { bashOutputDisplaySchema } from "../bash-output-display.js";
+import { contextCompressionSettingsSchema } from "../validationAppSettings.js";
 import { zcodeAutomationBotDeliveryTargetSchema } from "../bots.js";
 import { executionOutputPreviewSchema } from "../execution-output-preview.js";
 import { completeModelPropertiesDataSchema } from "../model-config.js";
@@ -2201,6 +2202,7 @@ export const zcodeSessionRuntimePreferencesResultSchema = z
     modelContextBudgetStrategy: zcodeModelContextBudgetStrategySchema.default(
       DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     ),
+    contextCompression: contextCompressionSettingsSchema.optional(),
   })
   .strict();
 export type ZCodeSessionRuntimePreferencesResult = z.infer<

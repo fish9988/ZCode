@@ -150,6 +150,7 @@ export interface AgentRuntimeInternal
 
   dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   modelCatalogPort?: ModelCatalogPort;
+  acpSessionController?: import("../context-compression/contract.js").AcpSessionController;
   runtimeTaskRegistry: RuntimeTaskRegistry;
   /**
    * 「run 还欠着决定、主代理闲着」的提醒钟（methods/dynamic-workflow-blocked-reminder.ts）。真实 runtime 上

@@ -708,6 +708,9 @@ async function rebuildConversationDerivedState(
   });
   rebuildContextPrefix(this);
   refreshRestoredAnnouncements(this);
+  if (this.acpSessionController?.isEnabled()) {
+    await this.acpSessionController.resetForRewind(this.sessionStore, this.branchGeneration);
+  }
   this.injectTargetStateIntoMessageHistory(
     await this.readSessionTargetForContext(options.traceContext),
   );

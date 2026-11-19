@@ -68,6 +68,41 @@ export interface WorkspaceFileEntry {
   type: "file" | "directory";
 }
 
+export type ContextCompressionEngineMode =
+  | "dsh-compact"
+  | "billion-context"
+  | "legacy"
+  | "disabled";
+
+export interface ContextCompressionSettings {
+  /** 上下文压缩引擎模式；默认 "dsh-compact"。 */
+  engine?: ContextCompressionEngineMode;
+  /** 全局默认有效压缩窗口上限（token）；单模型未单独设置 effectiveContextWindow 时生效，null 表示不限制。 */
+  defaultEffectiveContextWindow?: number | null;
+  /** dsh-compact：达到有效窗口的比例时触发自动压缩（0.50–0.95，默认 0.75）。 */
+  thresholdRatio?: number;
+  /** dsh-compact：压缩后保留最近上下文的比例（0.05–0.50，默认 0.20）。 */
+  retainRatio?: number;
+  /** dsh-compact / legacy：上下文溢出时是否尝试压缩恢复（默认 true）。 */
+  recoverOnOverflow?: boolean;
+  /** dsh-compact：单次请求溢出恢复重试次数上限（0–2，默认 1）。 */
+  maxOverflowRetries?: number;
+  /** dsh-compact / legacy：是否在模型请求前启用本地旧工具结果清理（microcompact，默认 false）。 */
+  microcompactEnabled?: boolean;
+  /** billion-context：按需触发折叠的下限比例（0.20–0.85，默认 0.45）。 */
+  biliMinContextLimitPct?: number;
+  /** billion-context：压力强提醒比例（0.40–0.95，默认 0.75）。 */
+  biliMaxContextLimitPct?: number;
+  /** billion-context：触发提醒的增量增长步长（token，默认 50000）。 */
+  biliGrowthFloorTokens?: number;
+  /** billion-context：尾部原样保护的最近消息组数（默认 3）。 */
+  biliPreserveRecentMessages?: number;
+  /** billion-context：尾部原样保护的最小 token 数（默认 20000）。 */
+  biliPreserveRecentTokens?: number;
+  /** billion-context：紧急截断兜底比例（0.80–0.99，默认 0.95）。 */
+  biliEmergencyThresholdPct?: number;
+}
+
 export interface SystemInfo {
   homedir: string;
   platform: string;
@@ -377,6 +412,8 @@ export interface AppSettings {
   toolSearchMode?: AppToolSearchMode;
   /** 新建或冷恢复 Session 是否启用 Memory；默认关闭。 */
   memoryEnabled?: boolean;
+  /** 上下文压缩引擎与有效窗口预算配置（新建或冷恢复 Session 时读取）。 */
+  contextCompression?: ContextCompressionSettings;
   onboardingOccupation?:
     | "office"
     | "developer"

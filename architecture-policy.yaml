@@ -1829,6 +1829,21 @@ modules:
     layers:
       adapters: .
     owner: agent
+  # cli-context-compression：内嵌 billion-context (acp-kernel) 适配层与 4 个原生工具
+  - id: cli-context-compression
+    roots:
+      - apps/zcode-cli/packages/core/src/context-compression
+    managed: true
+    requires:
+      - shared
+      - zcode-cli
+    publicEntrypoints:
+      - apps/zcode-cli/packages/core/src/context-compression/index.ts
+      - apps/zcode-cli/packages/core/src/context-compression/contract.ts
+    layers:
+      app: .
+    owner: agent
+
   # custom-appearance：由 architecture:adopt 登记
   - id: custom-appearance
     roots:
@@ -1857,6 +1872,10 @@ global:
   acceptedUpstreamSnapshot: scripts/architecture/upstream-snapshot.json
 
 exceptions:
+  - id: manual-model-config-effective-context-window
+    rule: unmanaged-new-file
+    paths: [ packages/provider/src/config/manual-model-config.ts ]
+    reason: 已准入的手动模型配置 schema 仅补充可选 effectiveContextWindow 字段以支持单模型有效压缩上限（docs/core/context-compression-engines.md）；不接管整个 provider 包。
   - id: region-copy-suggested-prompts-edit
     rule: unmanaged-new-file
     paths: [ packages/ui/src/v4/featureSuggestedPrompts.ts ]

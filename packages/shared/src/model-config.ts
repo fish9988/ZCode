@@ -71,6 +71,8 @@ export const completeModelPropertiesDataSchema = z
   .object({
     requiresMfjsToolSchema: z.boolean(),
     contextWindow: z.number().int().positive(),
+    /** 可选有效压缩上限（最佳工作窗口，如 1M 模型设 300K/500K）；缺省跟随全局或 contextWindow。 */
+    effectiveContextWindow: z.number().int().positive().nullish(),
     inputFormat: completeModelInputFormatDataSchema,
     outputFormat: completeModelOutputFormatDataSchema,
     supportsToolCall: z.boolean(),

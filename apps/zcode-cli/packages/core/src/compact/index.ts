@@ -19,11 +19,15 @@ export {
   DEFAULT_AUTOCOMPACT_THRESHOLD_PERCENT,
   DEFAULT_AUTOCOMPACT_OUTPUT_RESERVE_TOKENS,
   DEFAULT_COMPACT_CONTEXT_WINDOW,
+  DEFAULT_DSH_COMPACT_RETAIN_RATIO,
+  DEFAULT_DSH_COMPACT_THRESHOLD_RATIO,
   MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES,
   MAX_OUTPUT_TOKENS_FOR_SUMMARY,
   getAutoCompactOutputReserveTokens,
   getAutoCompactThreshold,
   getEffectiveContextWindowSize,
+  resolveDshCompactRatios,
+  resolveEffectiveCompressionWindow,
   shouldAutoCompact,
 } from "./policy.js";
 export {
@@ -42,7 +46,11 @@ export type {
   CompactModelMessage,
   TokenUsageLike,
 } from "./manual.js";
-export type { AutoCompactDecision, AutoCompactPolicyConfig } from "./policy.js";
+export type {
+  AutoCompactDecision,
+  AutoCompactPolicyConfig,
+  BillionContextRuntimeConfig,
+} from "./policy.js";
 export type { AutoCompactTokenOverride, AutoCompactTokenSource } from "./policy.js";
 export type {
   LocalMicrocompactBoundaryPayload,

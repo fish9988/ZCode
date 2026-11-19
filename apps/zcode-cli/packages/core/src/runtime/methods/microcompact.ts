@@ -34,11 +34,20 @@ export async function microcompactIfNeeded(
     turnRequestState: TurnRequestState;
   },
 ): Promise<void> {
-  if (this.config.compact?.enabled === false) return;
+  if (
+    this.config.compact?.enabled === false ||
+    this.config.compact?.engine === "disabled" ||
+    this.config.compact?.engine === "billion-context"
+  ) {
+    return;
+  }
   throwIfTurnAborted(abortSignal);
 
   const autoConfig: AutoCompactPolicyConfig = {
     contextWindow: context.model.properties.contextWindow,
+    ...(typeof context.model.properties.effectiveContextWindow === "number"
+      ? { effectiveContextWindow: context.model.properties.effectiveContextWindow }
+      : {}),
     ...this.config.compact,
     maxOutputTokens: resolveNormalRequestMaxOutputTokens({
       modelMaxOutputTokens: context.model.optionSpecs.maxOutputTokens.max,

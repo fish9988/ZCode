@@ -22,6 +22,10 @@ import {
   parseRemoteModelsPayload,
 } from "@zcode/services";
 import {
+  appSettingsPatchSchema,
+  appSettingsSchema,
+} from "@zcode/shared";
+import {
   THINKING_PRESET_IDS,
   buildThinkingProfileFromPreset,
   clampReasoningLevel,
@@ -708,6 +712,53 @@ describe("Pi-style thinking level profiles, CEL round-trip, and smart inference"
     expect(clampReasoningLevel("high", ["disabled", "enabled"])).toBe("enabled");
     expect(clampReasoningLevel("medium", ["none", "high", "max"])).toBe("high");
     expect(clampReasoningLevel(undefined, ["low", "high"])).toBe("high");
+  });
+
+  it("persists contextCompression settings and per-model effectiveContextWindow cleanly", () => {
+    const patch = appSettingsPatchSchema.parse({
+      contextCompression: {
+        engine: "billion-context",
+        defaultEffectiveContextWindow: 500_000,
+        thresholdRatio: 0.75,
+        retainRatio: 0.2,
+        biliMinContextLimitPct: 0.45,
+        biliMaxContextLimitPct: 0.75,
+      },
+    });
+    const full = appSettingsSchema.parse(patch);
+    expect(full.contextCompression).toMatchObject({
+      engine: "billion-context",
+      defaultEffectiveContextWindow: 500_000,
+      thresholdRatio: 0.75,
+      retainRatio: 0.2,
+    });
+
+    const modelCfg = ModelConfig.fromData({
+      enabled: true,
+      properties: {
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 300_000,
+        inputFormat: {
+          supportsText: true,
+          supportsImage: false,
+          supportsVideo: false,
+          supportsAudio: false,
+          supportsPdf: false,
+        },
+        outputFormat: { supportsText: true },
+        supportsToolCall: true,
+        supportsJsonSchemaOutput: false,
+        supportsNativeWebSearch: false,
+        supportsMidConversationSystem: false,
+        requiresMfjsToolSchema: false,
+      },
+      optionSpecs: {
+        maxOutputTokens: { max: 64_000, map: "{}" },
+        reasoningLevel: { values: ["low", "high"], map: '{ "reasoning_effort": reasoningLevel }' },
+      },
+    });
+    expect(modelCfg.validateComplete()).toEqual([]);
+    expect(modelCfg.toJSON().properties?.effectiveContextWindow).toBe(300_000);
   });
 });
 

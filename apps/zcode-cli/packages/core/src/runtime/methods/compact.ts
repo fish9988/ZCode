@@ -193,6 +193,9 @@ export async function autoCompactIfNeeded(
 
   const config: AutoCompactPolicyConfig = {
     contextWindow: context.model.properties.contextWindow,
+    ...(typeof context.model.properties.effectiveContextWindow === "number"
+      ? { effectiveContextWindow: context.model.properties.effectiveContextWindow }
+      : {}),
     ...this.config.compact,
     maxOutputTokens: resolveNormalRequestMaxOutputTokens({
       modelMaxOutputTokens: context.model.optionSpecs.maxOutputTokens.max,
@@ -332,7 +335,7 @@ function rollOverTotalTokensBudgetAfterCompact(
   );
 }
 
-function buildProviderUsageTokenOverride(
+export function buildProviderUsageTokenOverride(
   messages: RunModelTextRequestOptions["messages"],
   sourceEntries: readonly (RuntimeMessageEntry | undefined)[],
 ): AutoCompactTokenOverride | undefined {
@@ -381,7 +384,12 @@ export async function reactiveCompactAfterContextExceeded(
 ): Promise<CompactAttemptOutcome> {
   throwIfTurnAborted(abortSignal);
 
-  if (this.config.compact?.enabled === false) {
+  if (
+    this.config.compact?.enabled === false ||
+    this.config.compact?.engine === "disabled" ||
+    this.config.compact?.recoverOnOverflow === false ||
+    this.config.compact?.maxOverflowRetries === 0
+  ) {
     this.logger?.warn("Reactive compact skipped because compact is disabled", {
       ...traceContextToLogContext(turnTraceContext),
       errorMessage: originalError instanceof Error ? originalError.message : String(originalError),

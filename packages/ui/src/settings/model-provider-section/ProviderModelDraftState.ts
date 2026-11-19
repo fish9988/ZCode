@@ -99,6 +99,7 @@ export function modelDraftOverrides(draft: ProviderModelDraftValues): ReadonlySe
   const result = new Set(draft.overriddenFieldsValue ?? []);
   for (const field of [
     "contextWindowValue",
+    "effectiveContextWindowValue",
     "maxOutputTokensValue",
     "reasoningLevelMapValue",
   ] as const) {

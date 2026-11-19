@@ -528,6 +528,46 @@ function migrateLegacyWorkspaceSession(value: unknown): unknown {
   return migrated;
 }
 
+export const contextCompressionEngineModeSchema = z.enum([
+  "dsh-compact",
+  "billion-context",
+  "legacy",
+  "disabled",
+]);
+
+export const DEFAULT_CONTEXT_COMPRESSION_SETTINGS = {
+  engine: "dsh-compact" as const,
+  thresholdRatio: 0.75,
+  retainRatio: 0.2,
+  recoverOnOverflow: true,
+  maxOverflowRetries: 1,
+  microcompactEnabled: false,
+  biliMinContextLimitPct: 0.45,
+  biliMaxContextLimitPct: 0.75,
+  biliGrowthFloorTokens: 50_000,
+  biliPreserveRecentMessages: 3,
+  biliPreserveRecentTokens: 20_000,
+  biliEmergencyThresholdPct: 0.95,
+};
+
+export const contextCompressionSettingsSchema = z
+  .object({
+    engine: contextCompressionEngineModeSchema.optional(),
+    defaultEffectiveContextWindow: z.number().int().positive().nullish(),
+    thresholdRatio: z.number().min(0.5).max(0.95).optional(),
+    retainRatio: z.number().min(0.05).max(0.5).optional(),
+    recoverOnOverflow: z.boolean().optional(),
+    maxOverflowRetries: z.number().int().min(0).max(2).optional(),
+    microcompactEnabled: z.boolean().optional(),
+    biliMinContextLimitPct: z.number().min(0.2).max(0.85).optional(),
+    biliMaxContextLimitPct: z.number().min(0.4).max(0.95).optional(),
+    biliGrowthFloorTokens: z.number().int().min(5_000).max(500_000).optional(),
+    biliPreserveRecentMessages: z.number().int().min(1).max(20).optional(),
+    biliPreserveRecentTokens: z.number().int().min(1_000).max(200_000).optional(),
+    biliEmergencyThresholdPct: z.number().min(0.8).max(0.99).optional(),
+  })
+  .strict();
+
 const appSettingsObjectSchema = z.object({
   recentProjects: z.array(z.string()).default([]),
   locale: localeSchema.default("zh-CN"),
@@ -588,6 +628,7 @@ const appSettingsObjectSchema = z.object({
   onboardingOccupation: appSettingsOccupationSchema.nullish(),
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().default(false),
+  contextCompression: contextCompressionSettingsSchema.optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).default([]),
   lastActiveWorkspace: appWorkspaceSessionEntrySchema.nullable().optional(),
   remoteConversationWorkspaceBySourceServerId: z
@@ -707,6 +748,7 @@ export const appSettingsPatchSchema = z.object({
     .nullish(),
   proactiveSuggestionsEnabled: z.boolean().optional(),
   memoryEnabled: z.boolean().optional(),
+  contextCompression: contextCompressionSettingsSchema.optional(),
   lastWorkspaceSession: z.array(appWorkspaceSessionEntrySchema).optional(),
   lastActiveWorkspace: appWorkspaceSessionEntrySchema.nullable().optional(),
   remoteConversationWorkspaceBySourceServerId: z

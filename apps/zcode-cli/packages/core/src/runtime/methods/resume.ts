@@ -174,6 +174,9 @@ export async function resumeFromStore(
   await this.ensureContextInitialized(traceContext);
   // 第一个轮次重建前缀前装好 prompt 快照，恢复后的请求发送会话记录的 system。
   await loadPromptSnapshot(this, traceContext);
+  if (this.acpSessionController?.isEnabled()) {
+    await this.acpSessionController.loadFromStore(this.sessionStore, this.branchGeneration);
+  }
   // 恢复的 envInfo 来自存储，不是刚读的 Git，不能当预取；恢复的窗口还没决定过时，下一次请求重新读取。
   this.sessionStartGitPrefetch = false;
   // 存储里的"是否仓库"不是本 runtime 读的；第一次环境公告重读一次，变化时宣告。

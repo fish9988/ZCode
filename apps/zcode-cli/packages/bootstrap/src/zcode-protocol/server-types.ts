@@ -18,6 +18,7 @@ import type { AccountProviderConfigSnapshot } from "@zcode/provider";
 import {
   zcodeProtocolErrorCodes,
   type AppToolSearchMode,
+  type ContextCompressionSettings,
   type ZCodeAutomationBotDeliveryTarget,
   type ZCodeDeliveryKind,
   type ModelSelection,
@@ -97,6 +98,7 @@ export interface ZCodeProtocolSessionRecord {
   nativeSearchEnhancementsEnabled: boolean;
   toolSearchMode: AppToolSearchMode;
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
+  contextCompression?: ContextCompressionSettings;
   createdAt: number;
   deliveryKind?: ZCodeDeliveryKind;
   /**

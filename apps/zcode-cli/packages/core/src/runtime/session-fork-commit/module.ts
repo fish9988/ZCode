@@ -230,6 +230,9 @@ export function buildAtomicConversationForkBundle(
   const clonedEntries = entries.map((entry) => cloneVerifierEntryForAtomicFork(entry, identities));
   const modelSelectionEntry = buildModelSelectionEntry(childSessionId, modelSelection);
   const forkedPromptSnapshotEntry = buildForkedPromptSnapshotEntry(runtime, childSessionId);
+  const forkedAcpEntry = runtime.acpSessionController?.isEnabled()
+    ? runtime.acpSessionController.buildForkEntry(childSessionId)
+    : null;
   const environmentUpdate = buildForkEnvironmentUpdate(
     runtime,
     sourceMessages,
@@ -323,6 +326,7 @@ export function buildAtomicConversationForkBundle(
       // child 的历史属于压缩之前，只有两个窗口的 system 相同才能复用。
       // system 不含按会话变化的值；child 的 Gen UI 目录在 fork 时写入环境更新。
       ...(forkedPromptSnapshotEntry ? [forkedPromptSnapshotEntry] : []),
+      ...(forkedAcpEntry ? [forkedAcpEntry] : []),
     ],
     ...(goal ? { goal } : {}),
     ...(options.initialInput ? { initialInput: options.initialInput } : {}),

@@ -1,5 +1,9 @@
 import { configureOffPeakRuntime, controlOffPeakRuntime } from "./off-peak/runtime.js";
 import {
+  createAcpSessionController,
+  type AcpSessionController,
+} from "../context-compression/index.js";
+import {
   createTurnAgentDefinitions,
   createAgentDefinitionsReader,
   type GetAgentDefinitions,
@@ -234,6 +238,7 @@ export class AgentRuntime {
   >["prepare"];
   private dynamicWorkflowRunPort?: DynamicWorkflowRunPort;
   private modelCatalogPort?: ModelCatalogPort;
+  private acpSessionController?: AcpSessionController;
   private runtimeTaskRegistry: RuntimeTaskRegistry;
   // 「run 还欠着决定、主代理闲着」的提醒钟；由命令队列的忙 / 闲沿驱动，beginShutdown 停掉。
   private workflowBlockedReminder: WorkflowBlockedReminderClock;
@@ -377,6 +382,12 @@ export class AgentRuntime {
     this.dynamicWorkflowRunPort = deps.dynamicWorkflowRunPort;
     // GUI「配置」解析子代理模型用的目录（与工具上下文拿的是同一个端口）。
     this.modelCatalogPort = deps.modelCatalogPort;
+    this.acpSessionController = createAcpSessionController({
+      sessionId,
+      getCompactConfig: () => this.config.compact,
+      getSessionStore: () => this.sessionStore,
+      logger: this.logger,
+    });
     this.registry = deps.toolRegistry ?? createToolRegistry();
     this.workspaceRoot = this.workingDirectory;
     // 必须先于工具装配：registerRuntimeBuiltInTools 的灰度门读的就是这个状态。

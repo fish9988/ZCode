@@ -89,6 +89,7 @@ export function ProviderModelMetadataDialog({
     if (!result) setValidationAttempt((value) => value + 1);
   };
   const contextWindowInputId = useId();
+  const effectiveContextWindowInputId = useId();
   const maxOutputInputId = useId();
   const smart = draft.useRecommendedConfigValue !== false;
   const activeOverrides = smart ? overrideFields : new Set<string>();
@@ -235,6 +236,76 @@ export function ProviderModelMetadataDialog({
                   }
                   onChange={(event) => {
                     onDraftChange({ contextWindowValue: event.target.value });
+                  }}
+                  onFocus={selectFocusedInputText}
+                  onCompositionStart={handleCompositionStart}
+                  onCompositionEnd={handleCompositionEnd}
+                  onKeyDown={handleTechnicalInputKeyDown}
+                />
+              </div>
+              <div>
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor={effectiveContextWindowInputId}
+                    className="block text-ui-base text-foreground-subtle"
+                  >
+                    {intl.formatMessage({ id: "settings.modelProvider.effectiveContextWindow" })}
+                  </label>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {(
+                      [
+                        { label: "128K", value: "128000" },
+                        { label: "200K", value: "200000" },
+                        { label: "300K", value: "300000" },
+                        { label: "500K", value: "500000" },
+                        {
+                          label: intl.formatMessage({ id: "settings.contextCompression.unlimited" }),
+                          value: "",
+                        },
+                      ] as const
+                    ).map((preset) => (
+                      <Button
+                        key={preset.label}
+                        type="button"
+                        variant={
+                          draft.effectiveContextWindowValue.trim() === preset.value
+                            ? "secondary"
+                            : "outline"
+                        }
+                        size="sm"
+                        className="h-6 rounded-md px-1.5 text-ui-xs"
+                        onClick={() =>
+                          onDraftChange({ effectiveContextWindowValue: preset.value })
+                        }
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <Input
+                  {...TECHNICAL_INPUT_ATTRIBUTES}
+                  id={effectiveContextWindowInputId}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  size="lg"
+                  value={draft.effectiveContextWindowValue}
+                  data-personal-override={overridden(
+                    "effectiveContextWindowValue",
+                    personalConfig?.properties?.effectiveContextWindow != null,
+                  )}
+                  className={modelEditorControlStyle(
+                    overridden(
+                      "effectiveContextWindowValue",
+                      personalConfig?.properties?.effectiveContextWindow != null,
+                    ),
+                  )}
+                  placeholder={intl.formatMessage({
+                    id: "settings.modelProvider.effectiveContextWindowPlaceholder",
+                  })}
+                  onChange={(event) => {
+                    onDraftChange({ effectiveContextWindowValue: event.target.value });
                   }}
                   onFocus={selectFocusedInputText}
                   onCompositionStart={handleCompositionStart}

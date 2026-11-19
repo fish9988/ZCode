@@ -217,6 +217,7 @@
     ".agents/skills",
     "packages/formal-proof",
     "apps/zcode-cli",
+    "vendor/acp-kernel",
     "packages/zcode-cua",
     "docs/electron"
   ]

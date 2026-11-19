@@ -13,6 +13,7 @@ export type ProviderModelInputFormatDraft = ModelInputFormatData;
 export interface ProviderModelDraftValues {
   idValue: string;
   contextWindowValue: string;
+  effectiveContextWindowValue: string;
   maxOutputTokensValue: string;
   inputFormatValue: ProviderModelInputFormatDraft;
   enabledValue?: boolean;
@@ -54,6 +55,10 @@ export function createProviderModelDraftValues(
       model.personalConfig.properties?.contextWindow == null
         ? ""
         : String(model.personalConfig.properties.contextWindow),
+    effectiveContextWindowValue:
+      model.personalConfig.properties?.effectiveContextWindow == null
+        ? ""
+        : String(model.personalConfig.properties.effectiveContextWindow),
     maxOutputTokensValue:
       model.personalConfig.optionSpecs?.maxOutputTokens?.max == null
         ? ""
@@ -134,6 +139,13 @@ export function resolveProviderModelDraftCommit({
     return { status: "invalid", field: "contextWindow" };
   }
 
+  const effectiveContextWindow = draft.effectiveContextWindowValue.trim()
+    ? parsePositiveIntegerDraft(draft.effectiveContextWindowValue)
+    : undefined;
+  if (effectiveContextWindow === null) {
+    return { status: "invalid", field: "contextWindow" };
+  }
+
   const maxOutputTokens = draft.maxOutputTokensValue.trim()
     ? parsePositiveIntegerDraft(draft.maxOutputTokensValue)
     : undefined;
@@ -171,6 +183,11 @@ export function resolveProviderModelDraftCommit({
     // 系统字段不由编辑草稿产生；手动保存统一按可编辑 schema 提取。
     requiresMfjsToolSchema: currentModel.config.properties?.requiresMfjsToolSchema,
     contextWindow,
+    ...(effectiveContextWindow !== undefined
+      ? { effectiveContextWindow }
+      : inherited?.properties?.effectiveContextWindow != null
+        ? { effectiveContextWindow: inherited.properties.effectiveContextWindow }
+        : {}),
     inputFormat: {
       ...currentModel.config.properties?.inputFormat,
       supportsImage: draft.inputFormatValue.supportsImage,
@@ -202,6 +219,9 @@ export function resolveProviderModelDraftCommit({
   if (draft.contextWindowValue.trim())
     assignMutable(personalProperties, "contextWindow", contextWindow);
   else deleteMutable(personalProperties, "contextWindow");
+  if (draft.effectiveContextWindowValue.trim() && effectiveContextWindow !== undefined)
+    assignMutable(personalProperties, "effectiveContextWindow", effectiveContextWindow);
+  else deleteMutable(personalProperties, "effectiveContextWindow");
   for (const key of [
     "supportsJsonSchemaOutput",
     "supportsNativeWebSearch",

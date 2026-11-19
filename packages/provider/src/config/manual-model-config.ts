@@ -10,6 +10,7 @@ export const manualModelConfigSchema = completeModelConfigDataSchema
     properties: complete.properties
       .pick({
         contextWindow: true,
+        effectiveContextWindow: true,
         supportsJsonSchemaOutput: true,
         supportsNativeWebSearch: true,
         supportsMidConversationSystem: true,

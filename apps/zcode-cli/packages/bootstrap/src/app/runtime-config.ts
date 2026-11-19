@@ -198,6 +198,12 @@ export function resolveAppRuntimeConfig(input: {
       use: options.runtimeConfig?.memory?.use ?? configResult.config.memory.use,
       workspaceIdentity: workspaceIdentity?.trim() || undefined,
     },
+    // 将 config.features.compact 真正接入 runtimeConfig.compact，并默认使用 dsh-compact 策略。
+    compact: {
+      engine: "dsh-compact",
+      enabled: configResult.config.features.compact !== false,
+      ...options.runtimeConfig?.compact,
+    },
   };
   return {
     configuredMcpServers,

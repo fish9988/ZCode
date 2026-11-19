@@ -239,6 +239,11 @@ export function ModelRowInput({
     model.config.properties?.contextWindow ?? 0,
     locale,
   );
+  const effectiveContextWindowLabel =
+    typeof model.config.properties?.effectiveContextWindow === "number" &&
+    model.config.properties.effectiveContextWindow > 0
+      ? formatModelContextWindowLabel(model.config.properties.effectiveContextWindow, locale)
+      : null;
   const contextWindowAccessibleLabel = intl.formatMessage(
     { id: "settings.modelProvider.contextWindowBadgeLabel" },
     { value: contextWindowLabel },
@@ -276,6 +281,20 @@ export function ModelRowInput({
           >
             {contextWindowLabel}
           </span>
+          {effectiveContextWindowLabel ? (
+            <span
+              className="inline-flex h-5 max-w-24 shrink-0 items-center truncate rounded-md border border-border bg-surface px-1.5 font-mono text-ui-xs text-foreground-subtle"
+              title={intl.formatMessage(
+                { id: "settings.modelProvider.effectiveContextWindowBadgeTitle" },
+                { value: effectiveContextWindowLabel },
+              )}
+            >
+              {intl.formatMessage(
+                { id: "settings.modelProvider.effectiveContextWindowBadge" },
+                { value: effectiveContextWindowLabel },
+              )}
+            </span>
+          ) : null}
           {reasoningBadgeLabel ? (
             <span
               className="inline-flex h-5 max-w-28 shrink-0 items-center truncate rounded-md border border-border bg-surface px-1.5 font-mono text-ui-xs text-foreground-subtle"

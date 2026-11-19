@@ -177,6 +177,7 @@ export class ModelOutputFormatConfig extends ConfigOverlay<ModelOutputFormatConf
 export class ModelPropertiesConfig extends ConfigOverlay<ModelPropertiesConfig> {
   readonly requiresMfjsToolSchema?: ModelPropertiesConfigInput["requiresMfjsToolSchema"];
   readonly contextWindow?: ModelPropertiesConfigInput["contextWindow"];
+  readonly effectiveContextWindow?: ModelPropertiesConfigInput["effectiveContextWindow"];
   readonly inputFormat?: ModelInputFormatConfig | null;
   readonly outputFormat?: ModelOutputFormatConfig | null;
   readonly supportsToolCall?: ModelPropertiesConfigInput["supportsToolCall"];
@@ -207,6 +208,10 @@ export class ModelPropertiesConfig extends ConfigOverlay<ModelPropertiesConfig> 
         next.requiresMfjsToolSchema,
       ),
       contextWindow: this.overlayValue(this.contextWindow, next.contextWindow),
+      effectiveContextWindow: this.overlayValue(
+        this.effectiveContextWindow,
+        next.effectiveContextWindow,
+      ),
       inputFormat: this.overlayConfig(this.inputFormat, next.inputFormat),
       outputFormat: this.overlayConfig(this.outputFormat, next.outputFormat),
       supportsToolCall: this.overlayValue(this.supportsToolCall, next.supportsToolCall),
@@ -233,6 +238,7 @@ export class ModelPropertiesConfig extends ConfigOverlay<ModelPropertiesConfig> 
     return objectWithoutUndefined({
       requiresMfjsToolSchema: this.requiresMfjsToolSchema,
       contextWindow: this.contextWindow,
+      effectiveContextWindow: this.effectiveContextWindow,
       inputFormat: this.inputFormat?.toJSON() ?? this.inputFormat,
       outputFormat: this.outputFormat?.toJSON() ?? this.outputFormat,
       supportsToolCall: this.supportsToolCall,

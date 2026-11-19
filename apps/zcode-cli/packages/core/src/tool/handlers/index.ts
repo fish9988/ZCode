@@ -73,6 +73,10 @@ import { amendWorkflowToolEntry } from "./amend-workflow.js";
 import { createWorkflowToolEntry } from "./create-workflow.js";
 import { saveWorkflowToolEntry } from "./save-workflow.js";
 import { listSavedWorkflowsToolEntry } from "./list-saved-workflows.js";
+import {
+  ACP_CONTEXT_TOOL_NAMES,
+  ACP_CONTEXT_TOOLS,
+} from "../../context-compression/index.js";
 import { listModelsToolEntry } from "./list-models.js";
 import { evalWorkflowSnippetToolEntry } from "./eval-workflow-snippet.js";
 import { listWorkflowRunsToolEntry } from "./list-workflow-runs.js";
@@ -158,8 +162,11 @@ export const builtInTools: ToolEntry[] = [
   // `subagent_model`。不进 WORKFLOW_CHILD_DISALLOWED_TOOLS
   // ——那条禁令的理由是 alwaysAsk 在 child 里无窗可弹，只读查询不适用。
   listModelsToolEntry,
+  ...ACP_CONTEXT_TOOLS,
   // workflowToolEntry,
 ];
+
+const ACP_CONTEXT_TOOL_NAME_SET: ReadonlySet<string> = new Set(ACP_CONTEXT_TOOL_NAMES);
 
 /**
  * 动态工作流灰度门关闭时不注册的十个工具
@@ -221,6 +228,8 @@ interface RegisterBuiltInToolsOptions {
   includeDynamicWorkflow?: boolean;
   /** node_repl（js）默认关闭，由官方 browser-use 插件启用。 */
   includeNodeRepl?: boolean;
+  /** Billion-Context (acp-kernel) 内置上下文管理工具，仅在 engine === "billion-context" 时注册。 */
+  includeAcpContextTools?: boolean;
   /** browser-use 说明和 agent.browsers 注入由官方 browser-use 插件 + 宿主 browser bridge 共同启用。 */
   includeBrowserUse?: boolean;
   embeddedSearchEnabled?: boolean;
@@ -335,6 +344,12 @@ export function registerBuiltInTools(
       continue;
     }
     if (entry.metadata.name === "js" && options.includeNodeRepl !== true) {
+      continue;
+    }
+    if (
+      ACP_CONTEXT_TOOL_NAME_SET.has(entry.metadata.name) &&
+      options.includeAcpContextTools !== true
+    ) {
       continue;
     }
     registry.register(resolveBuiltInToolEntryForBranch(entry, options), {

@@ -60,6 +60,7 @@ import {
 import {
   subagentRuntimeConfigSchema,
   DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
+  type ContextCompressionSettings,
   ZCODE_SESSION_RUNTIME_PREFERENCES_REQUEST_TIMEOUT_MS,
   zcodeProtocolErrorCodes,
   zcodeProtocolMethods,
@@ -199,6 +200,7 @@ interface SessionStartupPreferences {
   modelContextBudgetStrategy: ZCodeModelContextBudgetStrategy;
   nativeSearchEnhancementsEnabled: boolean;
   toolSearchMode: AppToolSearchMode;
+  contextCompression?: ContextCompressionSettings;
   resolveInitialBashShellSelection: () => Promise<ExecutionShellSelection | undefined>;
 }
 
@@ -3606,6 +3608,48 @@ function integratedTerminalShellToExecutionSelection(
   };
 }
 
+function buildRuntimeCompactConfig(settings: ContextCompressionSettings | undefined) {
+  const engine = settings?.engine ?? "dsh-compact";
+  return {
+    engine,
+    enabled: engine !== "disabled",
+    ...(settings?.defaultEffectiveContextWindow !== undefined
+      ? { defaultEffectiveContextWindow: settings.defaultEffectiveContextWindow }
+      : {}),
+    ...(settings?.thresholdRatio !== undefined ? { thresholdRatio: settings.thresholdRatio } : {}),
+    ...(settings?.retainRatio !== undefined ? { retainRatio: settings.retainRatio } : {}),
+    ...(settings?.recoverOnOverflow !== undefined
+      ? { recoverOnOverflow: settings.recoverOnOverflow }
+      : {}),
+    ...(settings?.maxOverflowRetries !== undefined
+      ? { maxOverflowRetries: settings.maxOverflowRetries }
+      : {}),
+    ...(settings?.microcompactEnabled !== undefined
+      ? { microcompact: { enabled: settings.microcompactEnabled } }
+      : {}),
+    billionContext: {
+      ...(settings?.biliMinContextLimitPct !== undefined
+        ? { minContextLimitPct: settings.biliMinContextLimitPct }
+        : {}),
+      ...(settings?.biliMaxContextLimitPct !== undefined
+        ? { maxContextLimitPct: settings.biliMaxContextLimitPct }
+        : {}),
+      ...(settings?.biliGrowthFloorTokens !== undefined
+        ? { growthFloorTokens: settings.biliGrowthFloorTokens }
+        : {}),
+      ...(settings?.biliPreserveRecentMessages !== undefined
+        ? { preserveRecentMessages: settings.biliPreserveRecentMessages }
+        : {}),
+      ...(settings?.biliPreserveRecentTokens !== undefined
+        ? { preserveRecentTokens: settings.biliPreserveRecentTokens }
+        : {}),
+      ...(settings?.biliEmergencyThresholdPct !== undefined
+        ? { emergencyThresholdPct: settings.biliEmergencyThresholdPct }
+        : {}),
+    },
+  };
+}
+
 function resolveProtocolBashShellSelection(
   context: ZCodeProtocolAgentServerContext,
   selection: IntegratedTerminalShellSelection | undefined,
@@ -3718,6 +3762,7 @@ async function resolveSessionStartupPreferences(
       modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
       nativeSearchEnhancementsEnabled: source.parent.nativeSearchEnhancementsEnabled,
       toolSearchMode: source.parent.toolSearchMode,
+      contextCompression: source.parent.contextCompression,
       resolveInitialBashShellSelection: async () => inheritedShellSelection,
     };
   }
@@ -3742,6 +3787,7 @@ async function resolveSessionStartupPreferences(
     modelContextBudgetStrategy: DEFAULT_ZCODE_MODEL_CONTEXT_BUDGET_STRATEGY,
     nativeSearchEnhancementsEnabled: runtimePreferences.nativeSearchEnhancementsEnabled,
     toolSearchMode: runtimePreferences.toolSearchMode,
+    contextCompression: runtimePreferences.contextCompression,
     resolveInitialBashShellSelection: async () => {
       const executionPreferences = await requestSessionRuntimePreferences(
         context,
@@ -3866,6 +3912,7 @@ async function createRecord(
       nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,
       toolSearch: { mode: startupPreferences.toolSearchMode },
       modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
+      compact: buildRuntimeCompactConfig(startupPreferences.contextCompression),
       // Memory Settings 是现有 CLI features.memory/use 之外的总开关。只在关闭时
       // 写入 override，避免开启值反向覆盖用户已有的 CLI 禁用配置。
       ...(startupPreferences.memoryEnabled ? {} : { memory: { enabled: false } }),
@@ -3985,6 +4032,7 @@ async function createRecord(
     modelContextBudgetStrategy: startupPreferences.modelContextBudgetStrategy,
     nativeSearchEnhancementsEnabled: startupPreferences.nativeSearchEnhancementsEnabled,
     toolSearchMode: startupPreferences.toolSearchMode,
+    contextCompression: startupPreferences.contextCompression,
     ...(parentSessionId ? { parentSessionId } : {}),
     persistence: "persistence" in params ? (params.persistence ?? "immediate") : "immediate",
     protocolEventSequences: new Map(),

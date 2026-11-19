@@ -178,11 +178,12 @@ export const buildCli = async ({
 
   await build({
     banner: {
-      js: "#!/usr/bin/env node",
+      js: "#!/usr/bin/env node\nconst __zcodeImportMetaUrl = typeof __filename === 'string' ? require('node:url').pathToFileURL(__filename).href : 'file:///zcode.cjs';",
     },
     bundle: true,
     define: {
       __CLI_VERSION__: JSON.stringify(cliVersion),
+      "import.meta.url": "__zcodeImportMetaUrl",
     },
     entryPoints: [resolve(cliDirectory, "src/main.ts")],
     // Ink 7 and yoga-layout use top-level await, so the CJS CLI bundle loads the TUI

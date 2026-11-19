@@ -204,6 +204,8 @@ export interface ToolExecutionContext {
   dynamicWorkflowSnippetPort?: DynamicWorkflowSnippetPort;
   /** 模型目录端口；缺席则 ListModels 报能力缺席，CreateWorkflow 的 subagent_model 被拒。 */
   modelCatalogPort?: ModelCatalogPort;
+  /** Billion-Context (acp-kernel) 原生上下文压缩端口；仅在 engine === "billion-context" 时注入。 */
+  acpContextCompressionPort?: import("../context-compression/contract.js").AcpContextCompressionPort;
   runtimeTaskRegistry?: RuntimeTaskRegistry;
   readFileState?: ReadFileStateMap;
   recordReadFileStateMetadata?: (metadata: PersistedReadFileStateMetadata) => void;

@@ -1,12 +1,18 @@
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { CompactTrigger, type Model, type SessionEntryInfo, type SessionId } from "@zcode/contracts";
 
 import {
   estimateMessageTokens,
   getAutoCompactOutputReserveTokens,
   getAutoCompactThreshold,
   getEffectiveContextWindowSize,
+  resolveEffectiveCompressionWindow,
   shouldAutoCompact,
 } from "../src/compact/index.js";
+import { createAcpSessionController } from "../src/context-compression/index.js";
+import { selectCompactEntries } from "../src/runtime/helpers/compact-selection.js";
+import type { RuntimeMessageEntry } from "../src/agent/message-history.js";
 import {
   resolveModelStepMaxOutputTokens,
   resolveNormalRequestMaxOutputTokens,
@@ -308,5 +314,237 @@ describe("normal request output target", () => {
         modelContextBudgetStrategy: "preflight-v1",
       }),
     ).toBe(11_000);
+  });
+});
+
+describe("dsh-compact default engine & per-model effective context window", () => {
+  it("resolves effective compression window from per-model cap, global default, and hard contextWindow", () => {
+    expect(
+      resolveEffectiveCompressionWindow({
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 500_000,
+        defaultEffectiveContextWindow: 300_000,
+      }),
+    ).toBe(500_000);
+
+    expect(
+      resolveEffectiveCompressionWindow({
+        contextWindow: 1_000_000,
+        defaultEffectiveContextWindow: 300_000,
+      }),
+    ).toBe(300_000);
+
+    // Never exceeds hard contextWindow
+    expect(
+      resolveEffectiveCompressionWindow({
+        contextWindow: 200_000,
+        effectiveContextWindow: 500_000,
+      }),
+    ).toBe(200_000);
+  });
+
+  it("applies 75% threshold in dsh-compact mode against effectiveContextWindow", () => {
+    expect(
+      getAutoCompactThreshold({
+        engine: "dsh-compact",
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 500_000,
+      }),
+    ).toBe(375_000);
+
+    expect(
+      getAutoCompactThreshold({
+        engine: "dsh-compact",
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 300_000,
+        thresholdRatio: 0.8,
+      }),
+    ).toBe(240_000);
+
+    // billion-context and disabled modes disable stock auto-compact
+    for (const engine of ["billion-context", "disabled"] as const) {
+      const decision = shouldAutoCompact({
+        messages: ENOUGH_MESSAGES,
+        config: { engine, contextWindow: 200_000 },
+        tokenOverride: { source: "provider_usage", tokenCount: 190_000 },
+      });
+      expect(decision.shouldCompact).toBe(false);
+      expect(decision.reason).toBe("disabled");
+    }
+  });
+
+  it("retains ~20% trailing rounds in dsh-compact without splitting tool pairs", () => {
+    const makeRound = (idx: number, chars: number): RuntimeMessageEntry[] => [
+      { message: { role: "user", content: `u${idx}: ${"x".repeat(chars)}` } },
+      {
+        message: {
+          role: "assistant",
+          content: `a${idx}: ${"y".repeat(chars)}`,
+          toolCalls: [{ id: `tc_${idx}`, name: "Read", input: { file_path: `/f${idx}.ts` } }],
+        },
+      },
+      {
+        message: {
+          role: "tool",
+          toolCallId: `tc_${idx}`,
+          toolName: "Read",
+          content: `out${idx}: ${"z".repeat(chars)}`,
+        },
+      },
+    ];
+    // 5 rounds, each ~300 tokens (3 * 400 chars / 4 = ~300 tokens)
+    const entries: RuntimeMessageEntry[] = [
+      ...makeRound(1, 400),
+      ...makeRound(2, 400),
+      ...makeRound(3, 400),
+      ...makeRound(4, 400),
+      ...makeRound(5, 400),
+    ];
+
+    const selected = selectCompactEntries({
+      entries,
+      trigger: CompactTrigger.Auto,
+      retainBudgetTokens: 1_000,
+    });
+    // Should preserve 2 trailing assistant-started rounds ([a4, t4, u5] + [a5, t5]) without splitting tool pairs
+    expect(selected.groupsPreserved).toBe(2);
+    expect(selected.preservedEntries).toHaveLength(5);
+    expect(selected.entriesForSummary).toHaveLength(10);
+  });
+});
+
+describe("native billion-context (acp-kernel) session controller", () => {
+  it("projects turns, compresses ranges, searches folded history, decompresses inline/toFile, persists and rewinds", async () => {
+    const storedEntries: SessionEntryInfo[] = [];
+    const sessionStore = {
+      saveSessionEntry: async (entry: SessionEntryInfo) => {
+        const idx = storedEntries.findIndex((e) => e.id === entry.id);
+        if (idx >= 0) storedEntries[idx] = entry;
+        else storedEntries.push(entry);
+      },
+      sessionEntries: async (query: { sessionID: SessionId; type?: string }) =>
+        storedEntries.filter(
+          (e) => e.sessionID === query.sessionID && (!query.type || e.type === query.type),
+        ),
+    } as unknown as Parameters<ReturnType<typeof createAcpSessionController>["loadFromStore"]>[0];
+
+    const compactConfig = {
+      engine: "billion-context" as const,
+      defaultEffectiveContextWindow: 300_000,
+      billionContext: {
+        minContextLimitPct: 0.45,
+        maxContextLimitPct: 0.75,
+        growthFloorTokens: 20_000,
+        preserveRecentMessages: 2,
+        preserveRecentTokens: 1_000,
+      },
+    };
+    const fakeModel = {
+      providerId: "openai-chat-completions",
+      modelId: "gemini-4-neon-xhigh",
+      properties: {
+        contextWindow: 1_000_000,
+        effectiveContextWindow: 500_000,
+      },
+    } as unknown as Model;
+
+    const controller = createAcpSessionController({
+      sessionId: "sess_acp_test" as SessionId,
+      getCompactConfig: () => compactConfig,
+      getSessionStore: () => sessionStore,
+    });
+    expect(controller.isEnabled()).toBe(true);
+
+    const bigBody = "The secret port is 8317 and database schema uses sqlite WAL mode. ".repeat(120);
+    const entries: RuntimeMessageEntry[] = [
+      { message: { role: "system", content: "You are ZCode." }, metadata: { source: "context_prefix" } },
+      { message: { role: "user", content: "Start investigating the gateway config." } },
+      { message: { role: "assistant", content: `Step 1 findings: ${bigBody}` } },
+      { message: { role: "user", content: `More logs: ${bigBody}` } },
+      { message: { role: "assistant", content: `Step 2 analysis: ${bigBody}` } },
+      { message: { role: "user", content: "Now check the auth middleware." } },
+      { message: { role: "assistant", content: "Checked auth middleware, looks good." } },
+      { message: { role: "user", content: "Final question on current edit." } },
+    ];
+
+    const turn1 = await controller.prepareTurnEntries(
+      {
+        entries,
+        model: fakeModel,
+        compactConfig,
+        tokenCount: 10_000,
+        tokenCountSource: "estimate",
+      },
+      sessionStore,
+    );
+    expect(turn1.entries.some((e) => !("kind" in e && e.kind === "attachment") && e.message.role === "system" && String(e.message.content).includes("ACP TAGS"))).toBe(true);
+    expect(storedEntries).toHaveLength(1);
+
+    const statusBefore = await controller.executeStatus({});
+    expect(statusBefore.ok).toBe(true);
+    expect(statusBefore.report).toContain("500,000 effective tokens");
+
+    // Compress m00001..m00004
+    const compressed = await controller.executeCompress({
+      content:
+        "m00001-m00004 Gateway Investigation\nInvestigated gateway config: port is 8317, database uses SQLite WAL mode, logs verified clean.",
+    });
+    expect(compressed.ok).toBe(true);
+    expect(compressed.blocksCreated).toBe(1);
+
+    // Search finds content inside compressed summary & original folded messages
+    const searchRes = await controller.executeSearchContext({ query: "8317 WAL" });
+    expect(searchRes.ok).toBe(true);
+    expect(searchRes.matchCount).toBeGreaterThan(0);
+
+    // Decompress inline and toFile
+    const inlineDec = await controller.executeDecompress({ blockId: "b1", toFile: false });
+    expect(inlineDec.ok).toBe(true);
+    expect(inlineDec.content).toContain("8317");
+
+    const fileDec = await controller.executeDecompress({ blockId: "b1", toFile: true });
+    expect(fileDec.ok).toBe(true);
+    expect(fileDec.mode).toBe("file");
+    expect(fileDec.filePath).toBeDefined();
+    expect(existsSync(fileDec.filePath!)).toBe(true);
+    expect(readFileSync(fileDec.filePath!, "utf8")).toContain("8317");
+    rmSync(fileDec.filePath!, { force: true });
+
+    // Cold resume reloads persisted block state from session_entry
+    const resumed = createAcpSessionController({
+      sessionId: "sess_acp_test" as SessionId,
+      getCompactConfig: () => compactConfig,
+      getSessionStore: () => sessionStore,
+    });
+    await resumed.loadFromStore(sessionStore, 0);
+    const turn2 = await resumed.prepareTurnEntries(
+      {
+        entries,
+        model: fakeModel,
+        compactConfig,
+        tokenCount: 10_000,
+        tokenCountSource: "estimate",
+      },
+      sessionStore,
+    );
+    expect(turn2.activeBlockCount).toBe(1);
+
+    // Fork entry carries state
+    const forkEntry = resumed.buildForkEntry("sess_acp_child" as SessionId);
+    expect(forkEntry).not.toBeNull();
+
+    // Rewind resets branch state cleanly
+    await resumed.resetForRewind(sessionStore, 1);
+    const turn3 = await resumed.prepareTurnEntries(
+      {
+        entries,
+        model: fakeModel,
+        compactConfig,
+        tokenCount: 10_000,
+        tokenCountSource: "estimate",
+      },
+      sessionStore,
+    );
+    expect(turn3.activeBlockCount).toBe(0);
   });
 });

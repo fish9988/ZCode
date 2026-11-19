@@ -31,12 +31,38 @@ export interface CompactEntrySelection {
 export function selectCompactEntries(input: {
   entries: readonly RuntimeMessageEntry[];
   minimumGroupsToPreserve?: number;
+  /** dsh-compact：按 token 预算倒推保留尾部轮次（整轮不拆工具调用对），至少留 1 轮用于摘要。 */
+  retainBudgetTokens?: number;
+  useMidConversationSystem?: boolean;
   trigger: CompactTrigger;
 }): CompactEntrySelection {
   const split = splitRuntimeEntriesForCompactSelection(input.entries, input.trigger);
   const baseGroupsToPreserve = split.shouldPreserveRecent && split.groups.length > 1 ? 1 : 0;
+  let budgetGroupsToPreserve = baseGroupsToPreserve;
+  const retainBudget = positiveInt(input.retainBudgetTokens);
+  if (split.shouldPreserveRecent && retainBudget && retainBudget > 0 && split.groups.length > 1) {
+    // 从最新一轮倒推累计估算 token，保留约 retainRatio（默认 20%）的完整近期轮次。
+    let keptTokens = 0;
+    let count = 0;
+    const maxAllowed = split.groups.length - 1;
+    for (let index = split.groups.length - 1; index >= 1 && count < maxAllowed; index -= 1) {
+      const group = split.groups[index]!;
+      const projected = buildProviderRequestMessages({
+        entries: group,
+        applyCacheControl: false,
+        useMidConversationSystem: input.useMidConversationSystem,
+      }).messages;
+      const groupTokens = estimateMessageTokens(projected);
+      if (count > 0 && keptTokens + groupTokens > retainBudget) {
+        break;
+      }
+      keptTokens += groupTokens;
+      count += 1;
+    }
+    budgetGroupsToPreserve = Math.max(baseGroupsToPreserve, count);
+  }
   const requestedGroupsToPreserve = Math.max(
-    baseGroupsToPreserve,
+    budgetGroupsToPreserve,
     positiveInt(input.minimumGroupsToPreserve) ?? 0,
   );
   const maxGroupsToPreserve = Math.max(0, split.groups.length - 1);

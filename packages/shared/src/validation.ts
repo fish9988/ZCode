@@ -106,6 +106,9 @@ export {
   appSettingsOccupationEnum,
   appSettingsPatchSchema,
   appSettingsSchema,
+  contextCompressionEngineModeSchema,
+  contextCompressionSettingsSchema,
+  DEFAULT_CONTEXT_COMPRESSION_SETTINGS,
   localeSchema,
   postUpdateReleaseNotesPayloadSchema,
 } from "./validationAppSettings.js";

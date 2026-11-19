@@ -81,6 +81,10 @@ export function serializeRegistryModelConfig(
     properties: {
       requiresMfjsToolSchema: config.properties.requiresMfjsToolSchema,
       contextWindow: config.properties.contextWindow,
+      ...(typeof config.properties.effectiveContextWindow === "number" &&
+      config.properties.effectiveContextWindow > 0
+        ? { effectiveContextWindow: config.properties.effectiveContextWindow }
+        : {}),
       inputFormat: {
         supportsText: config.properties.inputFormat.supportsText,
         supportsImage: config.properties.inputFormat.supportsImage,
