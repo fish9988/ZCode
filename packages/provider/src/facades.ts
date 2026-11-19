@@ -72,6 +72,15 @@ export interface ProviderSettingsMutationTarget {
     membership?: ProviderModelMembership,
     useRecommendedConfig?: boolean,
   ): Promise<unknown>;
+  addPersonalModels?(
+    providerId: ProviderId,
+    models: readonly {
+      readonly modelId: ModelId;
+      readonly config: ModelConfig;
+      readonly useRecommendedConfig?: boolean;
+    }[],
+    membership?: ProviderModelMembership,
+  ): Promise<unknown>;
   renamePersonalModel(
     providerId: ProviderId,
     currentModelId: ModelId,
@@ -370,6 +379,39 @@ export class ProviderSettingsFacade {
         useRecommendedConfig,
       ),
     );
+  }
+
+  addPersonalModels(
+    providerId: ProviderId,
+    models: readonly {
+      readonly modelId: ModelId;
+      readonly config?: ModelConfigObject;
+      readonly useRecommendedConfig?: boolean;
+    }[],
+  ): Promise<ProviderSettingsView> {
+    return this.#mutateProvider(providerId, "add-models", async (target) => {
+      const membership = this.#modelMembership(providerId);
+      if (target.addPersonalModels) {
+        return target.addPersonalModels(
+          providerId,
+          models.map((entry) => ({
+            modelId: entry.modelId,
+            config: parseModelConfig(entry.config ?? {}),
+            useRecommendedConfig: entry.useRecommendedConfig,
+          })),
+          membership,
+        );
+      }
+      for (const entry of models) {
+        await target.addPersonalModel(
+          providerId,
+          entry.modelId,
+          parseModelConfig(entry.config ?? {}),
+          this.#modelMembership(providerId),
+          entry.useRecommendedConfig,
+        );
+      }
+    });
   }
 
   renamePersonalModel(

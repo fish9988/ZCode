@@ -553,6 +553,8 @@ export const TID_MODEL_PROVIDER_MODEL_INPUT = "model-provider-model-input";
 export const TID_MODEL_PROVIDER_MODEL_DELETE_BUTTON = "model-provider-model-delete-button";
 /** 模型供应商添加模型按钮 */
 export const TID_MODEL_PROVIDER_ADD_MODEL_BUTTON = "model-provider-add-model-button";
+/** 模型供应商拉取远程模型按钮 */
+export const TID_MODEL_PROVIDER_FETCH_MODELS_BUTTON = "model-provider-fetch-models-button";
 /** 模型设置分区顶部默认模型下拉触发器 */
 export const TID_SETTINGS_DEFAULT_MODEL_TRIGGER = "settings-default-model-trigger";
 /** 模型设置分区顶部默认模型的思考强度下拉触发器 */

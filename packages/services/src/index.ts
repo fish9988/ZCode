@@ -4,11 +4,20 @@ export { ServiceCollection, type ServiceExposurePolicy } from "./collection.js";
 export {
   IModelSelectionService,
   IProviderSettingsService,
+  createProviderSettingsService,
+  type BatchAddPersonalModelInput,
+  type FetchRemoteProviderModelsInput,
   type ModelSelectionView,
   type ModelSelectionViewInput,
   type ProviderSettingsProviderView,
   type ProviderSettingsView,
 } from "./model-provider/providerFacadeServices.js";
+export {
+  buildRemoteModelsCandidateUrls,
+  buildRemoteModelsRequestHeaders,
+  fetchRemoteProviderModels,
+  parseRemoteModelsPayload,
+} from "./model-provider/providerSettingsConnectivity.js";
 export {
   createAccountRequestAuthService,
   type IAccountRequestAuthService,

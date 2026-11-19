@@ -1815,6 +1815,7 @@ export function createLocalServices(options: {
     disposeModelSelectionConfiguredDefaultSource: () => nodeModelSelectionConfigRepo.dispose(),
     officialPlansPolicy,
     subscriptionUiPolicy,
+    fetchImpl: hostApiNetworkTransport.fetch,
     testConnectivity: createProviderSettingsConnectivityTester({
       testModelConnectivity: async (input) => {
         if (!providerConnectivityAgentService) {

@@ -6,7 +6,14 @@ import {
   type ProviderSettingsFormProvider,
   type ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type {
+  FetchRemoteProviderModelsResult,
+  ModelConnectivityResult,
+} from "@zcode/shared";
+import type {
+  BatchAddPersonalModelInput,
+  FetchRemoteProviderModelsInput,
+} from "@zcode/services";
 import {
   isApiKeyAccess,
   type ProviderApiType,
@@ -141,6 +148,8 @@ export function InlineEditableProviderCard({
   provider,
   onSave,
   onAddPersonalModel,
+  onAddPersonalModels,
+  onFetchRemoteModels,
   onSavePersonalModelDraft,
   onSetPersonalModelEnabled,
   onDeletePersonalModel,
@@ -164,6 +173,13 @@ export function InlineEditableProviderCard({
     config: ProviderSettingsFormModel["personalConfig"],
     useRecommendedConfig?: boolean,
   ) => Promise<unknown>;
+  onAddPersonalModels?: (
+    providerId: string,
+    models: readonly BatchAddPersonalModelInput[],
+  ) => Promise<unknown>;
+  onFetchRemoteModels?: (
+    input: FetchRemoteProviderModelsInput,
+  ) => Promise<FetchRemoteProviderModelsResult>;
   onSavePersonalModelDraft?: (input: SavePersonalModelDraftInput) => Promise<unknown>;
   onSetPersonalModelEnabled?: (
     providerId: string,
@@ -725,6 +741,71 @@ export function InlineEditableProviderCard({
     [onAddPersonalModel, provider.providerId, runSaveOperation],
   );
 
+  const handleFetchModels = useCallback(async (): Promise<FetchRemoteProviderModelsResult> => {
+    if (!onFetchRemoteModels) {
+      throw new Error("当前设置入口未装配远程模型拉取能力");
+    }
+    const baseUrl = draftRef.current.baseUrlValue.trim();
+    if (!baseUrl) {
+      throw new Error(intl.formatMessage({ id: "settings.modelProvider.fetchModelsMissingBaseUrl" }));
+    }
+    await commitPendingDraft("fetch-models").catch(() => undefined);
+    return onFetchRemoteModels({
+      providerId: provider.providerId,
+      apiType: draftRef.current.apiFormat,
+      baseUrl,
+      apiKey: draftRef.current.apiKeyValue,
+    });
+  }, [commitPendingDraft, intl, onFetchRemoteModels, provider.providerId]);
+
+  const handleAddModels = useCallback(
+    async (modelIds: readonly string[]) => {
+      const uniqueIds = [...new Set(modelIds.map((id) => id.trim()).filter(Boolean))];
+      if (uniqueIds.length === 0) return;
+      await runSaveOperation(
+        async () => {
+          if (onAddPersonalModels) {
+            await onAddPersonalModels(
+              provider.providerId,
+              uniqueIds.map((modelId) => ({
+                modelId,
+                config: {},
+                useRecommendedConfig: true,
+              })),
+            );
+            return;
+          }
+          if (!onAddPersonalModel) {
+            throw new Error("当前设置入口未装配 Personal Model 添加能力");
+          }
+          for (const modelId of uniqueIds) {
+            await onAddPersonalModel(provider.providerId, modelId, {}, true);
+          }
+        },
+        { draftOwnsRetry: true },
+      );
+      showFeedback({
+        key: `provider-fetch-models:${provider.providerId}`,
+        message: intl.formatMessage(
+          { id: "settings.modelProvider.fetchModelsSuccess" },
+          { count: uniqueIds.length },
+        ),
+        state: "success",
+        successEmphasis: true,
+        dismissible: true,
+        dismissLabel: intl.formatMessage({ id: "common.close" }),
+      });
+    },
+    [
+      intl,
+      onAddPersonalModel,
+      onAddPersonalModels,
+      provider.providerId,
+      runSaveOperation,
+      showFeedback,
+    ],
+  );
+
   const handleReorderModelIds = useCallback(
     (modelIds: string[]) => {
       if (!onReorderModelIds) return;
@@ -851,6 +932,8 @@ export function InlineEditableProviderCard({
           onModelEnabledChange={handleModelEnabledChange}
           onDeleteModel={handleDeleteModel}
           onAddModel={handleAddModel}
+          onAddModels={onAddPersonalModels || onAddPersonalModel ? handleAddModels : undefined}
+          onFetchModels={!isAccountProvider && onFetchRemoteModels ? handleFetchModels : undefined}
           onReorderModelIds={onReorderModelIds ? handleReorderModelIds : undefined}
           settingsRevision={settingsRevision ?? 0}
         />

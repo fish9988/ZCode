@@ -14,6 +14,11 @@ import {
   type ModelConnectivityResult,
   type OAuthProviderId,
 } from "@zcode/shared";
+import type {
+  BatchAddPersonalModelInput,
+  FetchRemoteProviderModelsInput,
+  ProviderSettingsView,
+} from "@zcode/services";
 import {
   getProviderFormApiKeyManagementUrl,
   type ProviderSettingsFormProvider,
@@ -61,7 +66,6 @@ import {
 } from "@/lib/codingPlanFunnelTelemetry.js";
 import { useCodingPlanUpgradeDialog } from "@/settings/CodingPlanUpgradeDialogProvider.js";
 import { useProviderSettingsView } from "@/hooks/useProviderSettingsView.js";
-import type { ProviderSettingsView } from "@zcode/services";
 import type { SavePersonalModelDraftInput } from "@zcode/provider";
 import { resolveAccountProviderInspectionAccess } from "@/lib/accountProviderAccess.js";
 import { projectProviderSettingsViewToFormProviders } from "@/lib/providerSettingsFormProjection.js";
@@ -242,6 +246,8 @@ export function ModelProviderSectionDetail({
   codingPlanDisconnectProviderId,
   onSave,
   onAddPersonalModel,
+  onAddPersonalModels,
+  onFetchRemoteModels,
   onSavePersonalModelDraft,
   onSetPersonalModelEnabled,
   onDeletePersonalModel,
@@ -278,6 +284,13 @@ export function ModelProviderSectionDetail({
     config: ProviderSettingsFormProvider["models"][number]["personalConfig"],
     useRecommendedConfig?: boolean,
   ) => Promise<unknown>;
+  onAddPersonalModels?: (
+    providerId: string,
+    models: readonly BatchAddPersonalModelInput[],
+  ) => Promise<unknown>;
+  onFetchRemoteModels?: (
+    input: FetchRemoteProviderModelsInput,
+  ) => Promise<import("@zcode/shared").FetchRemoteProviderModelsResult>;
   onSavePersonalModelDraft?: (input: SavePersonalModelDraftInput) => Promise<unknown>;
   onSetPersonalModelEnabled?: (
     providerId: string,
@@ -320,6 +333,8 @@ export function ModelProviderSectionDetail({
   // 账号分支曾漏传删除回调，出现只删 UI 不写盘。所有详情共用同一套模型操作装配。
   const modelEditingProps = {
     onAddPersonalModel,
+    onAddPersonalModels,
+    onFetchRemoteModels,
     onSavePersonalModelDraft,
     onSetPersonalModelEnabled,
     onDeletePersonalModel,

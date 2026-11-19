@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 模型供应商卡片仍在迁移期集中维护多个紧耦合区块，后续拆分时再移除。 */
 import {
   useCallback,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -10,18 +11,30 @@ import type {
   ProviderSettingsFormProvider,
   ProviderSettingsFormModel,
 } from "@/lib/providerSettingsFormTypes.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type {
+  FetchRemoteProviderModelsResult,
+  ModelConnectivityResult,
+} from "@zcode/shared";
 import type { ProviderApiType } from "@zcode/provider";
 import {
   TID_MODEL_PROVIDER_ADD_MODEL_BUTTON,
   TID_MODEL_PROVIDER_BASE_URL_INPUT,
+  TID_MODEL_PROVIDER_FETCH_MODELS_BUTTON,
   TID_MODEL_PROVIDER_MODEL_DELETE_BUTTON,
   TID_MODEL_PROVIDER_MODEL_INPUT,
   TID_MODEL_PROVIDER_NAME_EDIT_BUTTON,
   TID_MODEL_PROVIDER_NAME_INPUT,
   testId,
 } from "@zcode/shared/test-ids";
-import { InfoIcon, LockKeyholeIcon, Plus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
+import {
+  InfoIcon,
+  LockKeyholeIcon,
+  Plus,
+  Pencil,
+  RefreshCw,
+  Trash2,
+  MoreHorizontal,
+} from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { Input } from "@/components/ui/input.js";
 import {
@@ -47,6 +60,7 @@ import {
 import { SortableProviderModelList } from "@/settings/model-provider-section/SortableProviderModelList.js";
 import { useProviderModelDraft } from "@/settings/model-provider-section/useProviderModelDraft.js";
 import { ProviderLogo } from "@/settings/model-provider-section/ProviderLogo.js";
+import { FetchRemoteModelsDialog } from "@/custom-appearance/index.js";
 import type { ProviderConfigObject } from "@zcode/provider";
 
 export {
@@ -358,6 +372,8 @@ export function ProviderModelsSection({
   onModelEnabledChange,
   onDeleteModel,
   onAddModel,
+  onAddModels,
+  onFetchModels,
   onReorderModelIds,
   settingsRevision = 0,
 }: {
@@ -375,6 +391,8 @@ export function ProviderModelsSection({
   onDeleteModel: (modelId: string) => void;
   onModelEnabledChange?: (modelId: string, enabled: boolean) => void | Promise<void>;
   onAddModel: (model: ProviderSettingsFormModel) => void | Promise<void>;
+  onAddModels?: (modelIds: readonly string[]) => void | Promise<void>;
+  onFetchModels?: () => Promise<FetchRemoteProviderModelsResult>;
   onReorderModelIds?: (modelIds: string[]) => void;
   settingsRevision?: number;
 }) {
@@ -384,6 +402,16 @@ export function ProviderModelsSection({
   const [addSaving, setAddSaving] = useState(false);
   const addSavingRef = useRef(false);
   const [addCommitError, setAddCommitError] = useState<string | null>(null);
+  const [fetchDialogOpen, setFetchDialogOpen] = useState(false);
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [fetchSaving, setFetchSaving] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchResult, setFetchResult] = useState<FetchRemoteProviderModelsResult | null>(null);
+  const fetchGenerationRef = useRef(0);
+  const existingModelIds = useMemo(
+    () => new Set(models.map((model) => model.modelId)),
+    [models],
+  );
   const [addModel] = useState(createEmptyModel);
   const [addDraftErrorField, setAddDraftErrorField] = useState<
     | "id"
@@ -468,23 +496,97 @@ export function ProviderModelsSection({
       })
     : null;
 
+  const runFetchModels = useCallback(async () => {
+    if (!onFetchModels) return;
+    const generation = ++fetchGenerationRef.current;
+    setFetchLoading(true);
+    setFetchError(null);
+    try {
+      const result = await onFetchModels();
+      if (fetchGenerationRef.current !== generation) return;
+      setFetchResult(result);
+    } catch (error) {
+      if (fetchGenerationRef.current !== generation) return;
+      setFetchResult(null);
+      setFetchError(error instanceof Error ? error.message : String(error));
+    } finally {
+      if (fetchGenerationRef.current === generation) {
+        setFetchLoading(false);
+      }
+    }
+  }, [onFetchModels]);
+
+  const openFetchDialog = useCallback(() => {
+    setFetchDialogOpen(true);
+    void runFetchModels();
+  }, [runFetchModels]);
+
+  const handleFetchDialogOpenChange = useCallback(
+    (open: boolean) => {
+      if (fetchSaving) return;
+      if (!open) {
+        fetchGenerationRef.current += 1;
+        setFetchDialogOpen(false);
+        setFetchLoading(false);
+        setFetchError(null);
+        return;
+      }
+      setFetchDialogOpen(true);
+    },
+    [fetchSaving],
+  );
+
+  const handleConfirmFetchModels = useCallback(
+    async (modelIds: readonly string[]) => {
+      if (fetchSaving || modelIds.length === 0) return;
+      setFetchSaving(true);
+      setFetchError(null);
+      try {
+        if (onAddModels) {
+          await onAddModels(modelIds);
+        }
+        setFetchDialogOpen(false);
+      } catch (error) {
+        setFetchError(error instanceof Error ? error.message : String(error));
+      } finally {
+        setFetchSaving(false);
+      }
+    },
+    [fetchSaving, onAddModels],
+  );
+
   return (
     <div>
       <div className="mb-1 flex flex-wrap items-center justify-between gap-3">
         <span className="text-ui-base text-foreground-subtle">
           {intl.formatMessage({ id: "settings.modelProvider.models" })}
         </span>
-        <Button
-          type="button"
-          variant="secondary"
-          size="default"
-          className="rounded-lg"
-          data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
-          onClick={openAddDialog}
-        >
-          <Plus data-icon="inline-start" aria-hidden="true" />
-          {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          {onFetchModels ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="default"
+              className="rounded-lg"
+              data-testid={TID_MODEL_PROVIDER_FETCH_MODELS_BUTTON}
+              onClick={openFetchDialog}
+            >
+              <RefreshCw data-icon="inline-start" aria-hidden="true" />
+              {intl.formatMessage({ id: "settings.modelProvider.fetchModels" })}
+            </Button>
+          ) : null}
+          <Button
+            type="button"
+            variant="secondary"
+            size="default"
+            className="rounded-lg"
+            data-testid={TID_MODEL_PROVIDER_ADD_MODEL_BUTTON}
+            onClick={openAddDialog}
+          >
+            <Plus data-icon="inline-start" aria-hidden="true" />
+            {intl.formatMessage({ id: "settings.modelProvider.addModel" })}
+          </Button>
+        </div>
       </div>
       {models.length > 0 ? (
         <div className="overflow-hidden rounded-lg border border-input-border bg-input">
@@ -580,6 +682,20 @@ export function ProviderModelsSection({
             void editor.flush().catch(() => undefined);
           }}
         />
+        {onFetchModels ? (
+          <FetchRemoteModelsDialog
+            open={fetchDialogOpen}
+            onOpenChange={handleFetchDialogOpenChange}
+            loading={fetchLoading}
+            saving={fetchSaving}
+            error={fetchError}
+            endpointUrl={fetchResult?.endpointUrl ?? null}
+            models={fetchResult?.models ?? []}
+            existingModelIds={existingModelIds}
+            onRetry={() => void runFetchModels()}
+            onConfirm={handleConfirmFetchModels}
+          />
+        ) : null}
       </>
     </div>
   );

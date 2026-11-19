@@ -79,3 +79,18 @@ export type ModelConnectivityResult =
         readonly code?: "provider-unavailable" | "model-unavailable";
       };
     };
+
+/** 第三方供应商 `/models` 接口拉取到的单个模型条目。 */
+export interface RemoteProviderModelEntry {
+  readonly id: string;
+  readonly displayName?: string;
+  readonly ownedBy?: string;
+  readonly contextWindow?: number;
+  readonly maxOutputTokens?: number;
+}
+
+/** 从第三方供应商拉取模型列表的返回结果。 */
+export interface FetchRemoteProviderModelsResult {
+  readonly endpointUrl: string;
+  readonly models: readonly RemoteProviderModelEntry[];
+}

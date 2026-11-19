@@ -33,6 +33,7 @@ const log = createServiceLogger("provider-runtime");
 export interface ProviderRuntimeOptions extends ProviderConfigRuntimeOptions {
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
+  readonly fetchImpl?: typeof fetch;
 }
 
 export interface ProviderRuntimeDependencies {
@@ -40,6 +41,7 @@ export interface ProviderRuntimeDependencies {
   readonly accountSource?: RefreshableProviderSource<AccountProviderConfigSnapshot>;
   readonly disposeAccountSource?: () => void;
   readonly testConnectivity?: ProviderSettingsConnectivityTester;
+  readonly fetchImpl?: typeof fetch;
   readonly modelSelectionConfiguredDefaultSource?: ModelSelectionConfiguredDefaultSource;
   readonly disposeModelSelectionConfiguredDefaultSource?: () => void;
   readonly officialPlansPolicy?: OfficialPlansPolicy;
@@ -114,6 +116,7 @@ export class ProviderRuntime {
       ensureReady,
       dependencies.testConnectivity,
       dependencies.subscriptionUiPolicy,
+      dependencies.fetchImpl,
     );
     this.#providerSettingsRuntime = providerSettingsRuntime;
     this.providerSettings = providerSettingsRuntime;
@@ -166,6 +169,7 @@ function createSettingsMutationTarget(
       configService.reorderPersonalModels(providerId, modelIds, membership),
     // 手工四参数转发曾丢掉新增的配置模式；直接绑定完整签名，避免装配层截断写入意图。
     addPersonalModel: configService.addPersonalModel.bind(configService),
+    addPersonalModels: configService.addPersonalModels.bind(configService),
     renamePersonalModel: (providerId, currentModelId, nextModelId, membership) =>
       configService.renamePersonalModel(providerId, currentModelId, nextModelId, membership),
     deletePersonalModel: (providerId, modelId, membership) =>
@@ -212,7 +216,7 @@ function createSettingsMutationTarget(
 }
 
 export function createProviderRuntime(options: ProviderRuntimeOptions): ProviderRuntime {
-  const { accountSource, testConnectivity, ...configRuntimeOptions } = options;
+  const { accountSource, testConnectivity, fetchImpl, ...configRuntimeOptions } = options;
   const configRuntime = createProviderConfigRuntime(configRuntimeOptions);
   const modelSelectionConfiguredDefaultSource = new NodeModelSelectionConfigRepository({
     personalRepository: configRuntime.personalRepository,
@@ -221,6 +225,7 @@ export function createProviderRuntime(options: ProviderRuntimeOptions): Provider
     configRuntime,
     accountSource,
     testConnectivity,
+    fetchImpl,
     modelSelectionConfiguredDefaultSource,
     disposeModelSelectionConfiguredDefaultSource: () =>
       modelSelectionConfiguredDefaultSource.dispose(),

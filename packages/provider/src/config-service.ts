@@ -365,6 +365,79 @@ export class ProviderConfigService implements ProviderSource<ProviderConfigSnaps
     });
   }
 
+  async addPersonalModels(
+    providerId: ProviderId,
+    models: readonly {
+      readonly modelId: ModelId;
+      readonly config: ModelConfig;
+      readonly useRecommendedConfig?: boolean;
+    }[],
+    membership?: ProviderModelMembership,
+  ): Promise<ProviderConfigLayerSnapshot> {
+    const normalizedProviderId = normalizeId("providerId", providerId);
+    const normalizedEntries: {
+      readonly modelId: ModelId;
+      readonly config: ModelConfig;
+      readonly useRecommendedConfig?: boolean;
+    }[] = [];
+    const seenIds = new Set<string>();
+    for (const entry of models) {
+      const normalizedModelId = normalizeId("modelId", entry.modelId);
+      if (seenIds.has(normalizedModelId)) continue;
+      seenIds.add(normalizedModelId);
+      normalizedEntries.push({
+        modelId: normalizedModelId,
+        config: entry.config,
+        useRecommendedConfig: entry.useRecommendedConfig,
+      });
+    }
+    if (normalizedEntries.length === 0) {
+      return this.#personalRepository.read();
+    }
+    const zcodeBuiltin = await this.#zcodeBuiltinSource.read();
+    return this.#updatePersonal((current) => {
+      assertMembershipCurrent(membership, normalizedProviderId, current);
+      const provider = writableProviderOverlay(zcodeBuiltin, current, normalizedProviderId);
+      const builtinModelIds =
+        membership?.inheritedModelIds ??
+        resolveProviderBuiltinModelIds(zcodeBuiltin, current.providers, normalizedProviderId);
+      const currentModelIds = provider.personalModelIds ?? [];
+      const existing = new Set<string>([...builtinModelIds, ...currentModelIds]);
+      const toAdd = normalizedEntries.filter((entry) => !existing.has(entry.modelId));
+      if (toAdd.length === 0) {
+        return {
+          providers: current.providers,
+          models: current.models,
+          providerOrder: current.providerOrder,
+        };
+      }
+      const nextPersonalModelIds = [...currentModelIds, ...toAdd.map((entry) => entry.modelId)];
+      let nextModels = current.models;
+      for (const entry of toAdd) {
+        nextModels = nextModels.setExact(
+          normalizedProviderId,
+          entry.modelId,
+          entry.config.overlay(new ModelConfig({ enabled: true })),
+          entry.useRecommendedConfig,
+        );
+      }
+      return {
+        providers: current.providers.set(
+          normalizedProviderId,
+          provider.withPersonalModelIds(nextPersonalModelIds).withModelOrder(
+            normalizeModelOrder(
+              builtinModelIds,
+              nextPersonalModelIds,
+              provider.modelOrder ?? [],
+            ),
+          ),
+        ),
+        models: nextModels,
+        providerOrder: current.providerOrder,
+      };
+    });
+  }
+
   async renamePersonalModel(
     providerId: ProviderId,
     currentModelId: ModelId,

@@ -18,8 +18,13 @@ import {
   type SavePersonalModelDraftInput,
 } from "@zcode/provider";
 import { createServiceDescriptor } from "../descriptors.js";
-import type { ModelConnectivityResult } from "@zcode/shared";
+import type {
+  FetchRemoteProviderModelsResult,
+  ModelConnectivityResult,
+} from "@zcode/shared";
 import { createServiceLogger } from "../logger/serviceLogger.js";
+import { fetchRemoteProviderModels } from "./providerSettingsConnectivity.js";
+import type { ProviderApiType } from "@zcode/provider";
 
 export type {
   ProviderSettingsProviderView,
@@ -53,6 +58,13 @@ export interface IProviderSettingsService {
     config: ModelConfigObject,
     useRecommendedConfig?: boolean,
   ): Promise<ProviderSettingsView>;
+  addPersonalModels(
+    providerId: ProviderId,
+    models: readonly BatchAddPersonalModelInput[],
+  ): Promise<ProviderSettingsView>;
+  fetchRemoteModels(
+    input: FetchRemoteProviderModelsInput,
+  ): Promise<FetchRemoteProviderModelsResult>;
   renamePersonalModel(
     providerId: ProviderId,
     currentModelId: ModelId,
@@ -87,6 +99,19 @@ export interface ProviderSettingsConnectivityRequest {
   readonly workspaceIdentity?: string;
   readonly providerId: ProviderId;
   readonly modelId: ModelId;
+}
+
+export interface BatchAddPersonalModelInput {
+  readonly modelId: ModelId;
+  readonly config?: ModelConfigObject;
+  readonly useRecommendedConfig?: boolean;
+}
+
+export interface FetchRemoteProviderModelsInput {
+  readonly providerId?: ProviderId;
+  readonly apiType: ProviderApiType;
+  readonly baseUrl: string;
+  readonly apiKey?: string;
 }
 
 export type ProviderSettingsConnectivityTester = (
@@ -127,6 +152,7 @@ export function createProviderSettingsService(
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
   subscriptionUiPolicy?: SubscriptionUiPolicy,
+  fetchImpl?: typeof fetch,
 ): IProviderSettingsService & { dispose(): void } {
   const listeners = new Set<(view: ProviderSettingsView) => void>();
   let disposed = false;
@@ -230,6 +256,33 @@ export function createProviderSettingsService(
       return projectView(
         await facade.addPersonalModel(providerId, modelId, config, useRecommendedConfig),
       );
+    },
+    addPersonalModels: async (providerId, models) => {
+      await ensureReady();
+      return projectView(await facade.addPersonalModels(providerId, models));
+    },
+    fetchRemoteModels: async (input) => {
+      await ensureReady();
+      if (input.providerId) {
+        await facade.waitForProviderOperations(input.providerId);
+      }
+      const provider = input.providerId
+        ? facade.getView().providers.find((item) => item.providerId === input.providerId)
+        : undefined;
+      const baseUrl = input.baseUrl.trim() || provider?.effectiveConfig.api?.baseUrl || "";
+      const access = provider?.effectiveConfig.access;
+      const savedApiKey =
+        access && (access.type === "api-key" || access.type === "zhipu-coding-plan-api-key")
+          ? (access.apiKey ?? undefined)
+          : undefined;
+      const apiKey = input.apiKey !== undefined ? input.apiKey : savedApiKey;
+      return fetchRemoteProviderModels({
+        apiType: input.apiType,
+        baseUrl,
+        apiKey,
+        customHeaders: provider?.effectiveConfig.api?.headers ?? undefined,
+        fetchImpl,
+      });
     },
     renamePersonalModel: async (providerId, currentModelId, nextModelId) => {
       await ensureReady();
