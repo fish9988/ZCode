@@ -18,6 +18,7 @@ import {
   type CodingPlanEntryInventory,
 } from "@/hooks/useCodingPlanEntryPlanList.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useSettings } from "@/hooks/useSettingService.js";
 import { reportCodingPlanUpgradeClick } from "@/lib/codingPlanFunnelTelemetry.js";
 
 interface CodingPlanUpgradeDialogContextValue {
@@ -35,6 +36,10 @@ const CodingPlanUpgradeDialogContext = createContext<CodingPlanUpgradeDialogCont
 export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactNode }) {
   const platform = usePlatform();
   const inventory = useCodingPlanEntryPlanList();
+  const { settings } = useSettings();
+  // 订阅界面关闭时所有购买入口都不再响应：这里是升级 webview 的唯一收口，
+  // 各调用点无需各自判断。缺失按开启，保持旧设置行为。
+  const subscriptionUiEnabled = settings?.subscriptionUiEnabled !== false;
   const inventoryRef = useRef(inventory);
   inventoryRef.current = inventory;
   const [target, setTarget] = useState<CodingPlanUpgradeDialogTarget | undefined>(undefined);
@@ -48,6 +53,7 @@ export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactN
       observation?: { signal: AbortSignal; onResult: (opened: boolean) => void },
     ) => {
       // 所有入口统一守卫；查询完成后不自动重放之前被拦截的点击。
+      if (!subscriptionUiEnabled) return false;
       const { status, entryPlanList } = inventoryRef.current;
       if (observation?.signal.aborted) return false;
       if (status !== "ready") {
@@ -82,7 +88,7 @@ export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactN
       setOpenVersion((version) => version + 1);
       return true;
     },
-    [platform],
+    [platform, subscriptionUiEnabled],
   );
   const value = useMemo(
     () => ({ openCodingPlanUpgrade, inventory }),
@@ -92,16 +98,18 @@ export function CodingPlanUpgradeDialogProvider({ children }: { children: ReactN
   return (
     <CodingPlanUpgradeDialogContext.Provider value={value}>
       {children}
-      <CodingPlanUpgradeDialog
-        key={openVersion}
-        target={target}
-        onClose={() => {
-          handleOpenResult(false);
-          setTarget(undefined);
-        }}
-        onOpenResult={opening.current ?? undefined}
-        onReopen={setTarget}
-      />
+      {subscriptionUiEnabled ? (
+        <CodingPlanUpgradeDialog
+          key={openVersion}
+          target={target}
+          onClose={() => {
+            handleOpenResult(false);
+            setTarget(undefined);
+          }}
+          onOpenResult={opening.current ?? undefined}
+          onReopen={setTarget}
+        />
+      ) : null}
     </CodingPlanUpgradeDialogContext.Provider>
   );
 }

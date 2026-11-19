@@ -7,6 +7,7 @@ import { createRequire } from "node:module";
 import { HELPER_APP_NAME } from "@zcode/zcode-cua/broker/helperConstants";
 import { runCommand, runCommandAndReadStdout } from "../../scripts/spawn-command.mjs";
 import { loadBuiltinProviderConfig } from "../../scripts/builtin-provider-config.mjs";
+import { resolveBuildTimeConfig } from "../../scripts/build-time-config.mjs";
 import { noticesFileName, stageElectronNotices } from "../../scripts/third-party-notices.mjs";
 import { resolveNativeSearchReleasePlan } from "../../scripts/native-search-tools-config.mjs";
 import { getBuildMetadata } from "./scripts/build-metadata.mjs";
@@ -58,6 +59,8 @@ const targetPlatform = getTargetPlatform();
 const shouldPackageWindowsBrowserImportHelper =
   targetPlatform.os === "win32" && process.env.ZCODE_ENABLE_WINDOWS_BROWSER_IMPORT === "1";
 const builtinProviderConfig = await loadBuiltinProviderConfig();
+// 更新源与桌面其他构建期能力共用同一解析入口，避免 electron-builder 与 tsup 各自读一套环境变量。
+const buildTimeConfig = await resolveBuildTimeConfig(process.env);
 const desktopProductIdentity = resolveDesktopProductIdentity({
   ...process.env,
   ZCODE_ENV: builtinProviderConfig.environment,
@@ -1070,14 +1073,24 @@ export default {
     installerHeaderIcon: "build/icon_installer.ico",
   },
   detectUpdateChannel: false,
-  publish: {
-    provider: "generic",
-    // 当前 OSS/CDN 对多 Range 请求返回 206，但 Content-Type 仍是 application/x-msdownload，
-    // electron-updater 会因缺少 multipart/byteranges 直接回退整包下载。关闭 multiple range 后仍走差分，
-    // 只是按单 Range 顺序拉取差异块，避免 Windows 用户更新时从约 15MB 退化成 300MB+ 全量包。
-    useMultipleRangeRequest: false,
-    // 新客户端运行时使用服务端 manifest provider；这里仅保留 electron-builder 必需的
-    // generic publish 占位，避免打包产物继续携带可配置的旧 stable feed。
-    url: "http://localhost:8081",
-  },
+  publish:
+    buildTimeConfig.updateProvider === "github"
+      ? {
+          // fork 走 GitHub Releases：app-update.yml 由 electron-builder 直接写入 owner/repo，
+          // electron-updater 用内置 GitHubProvider 读取 latest.yml，不再经过服务端 manifest。
+          provider: "github",
+          owner: buildTimeConfig.updateGithubOwner,
+          repo: buildTimeConfig.updateGithubRepo,
+          releaseType: "release",
+        }
+      : {
+          provider: "generic",
+          // 当前 OSS/CDN 对多 Range 请求返回 206，但 Content-Type 仍是 application/x-msdownload，
+          // electron-updater 会因缺少 multipart/byteranges 直接回退整包下载。关闭 multiple range 后仍走差分，
+          // 只是按单 Range 顺序拉取差异块，避免 Windows 用户更新时从约 15MB 退化成 300MB+ 全量包。
+          useMultipleRangeRequest: false,
+          // 新客户端运行时使用服务端 manifest provider；这里仅保留 electron-builder 必需的
+          // generic publish 占位，避免打包产物继续携带可配置的旧 stable feed。
+          url: "http://localhost:8081",
+        },
 };

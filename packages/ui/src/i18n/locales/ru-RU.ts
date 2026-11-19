@@ -4210,6 +4210,35 @@ const ruRU: Record<string, string> = {
   "settings.modelProvider.catalogProviderSearch": "Поиск провайдеров",
   "settings.modelProvider.catalogProviderEmpty": "Провайдеры не найдены",
   "settings.modelProvider.addProviderAction": "Добавить провайдера",
+  "settings.defaultModel": "Модель по умолчанию",
+  "settings.defaultModelDescription":
+    "Глобальная модель для новых диалогов. «Авто» выбирает модель по порядку доступного списка.",
+  "settings.defaultModel.auto": "Автоматический выбор модели",
+  "settings.defaultModel.autoOption": "Авто (по порядку списка)",
+  "settings.defaultModel.reasoning": "Уровень рассуждений",
+  "settings.defaultModel.unavailable": "{model} (отключена или недоступна)",
+  "settings.defaultModel.cleared": "Возвращён автоматический выбор модели",
+  "settings.defaultModel.saved": "«{model}» назначена глобальной моделью по умолчанию",
+  "settings.defaultModel.saveError": "Не удалось сохранить настройку модели по умолчанию",
+  "settings.preferDefaultModel": "Всегда начинать новые диалоги с этой модели",
+  "settings.preferDefaultModelDescription":
+    "Если включено, каждый новый диалог использует модель по умолчанию выше. Если выключено, предпочитается модель, последняя использованная в проекте.",
+  "settings.preferDefaultModel.saveError": "Не удалось сохранить настройку модели для новых диалогов",
+  "settings.officialPlans": "Включить официальные планы Zhipu (BigModel / Start Plan)",
+  "settings.officialPlansDescription":
+    "Если выключено, планы BigModel / Start Plan / Z.ai полностью скрываются из выбора модели, значения по умолчанию и резервного выбора. Используются только пользовательские провайдеры.",
+  "settings.officialPlans.enabled": "Официальные планы Zhipu включены (BigModel / Start Plan)",
+  "settings.officialPlans.disabled":
+    "Официальные планы Zhipu отключены; в чатах используются только пользовательские провайдеры",
+  "settings.officialPlans.saveError": "Не удалось сохранить переключатель официальных планов",
+  "settings.officialPlans.disabledHint":
+    "Официальные планы Zhipu отключены: модели этой группы не отображаются в списке моделей чата и не используются как модели по умолчанию или резервные. Чтобы восстановить их, включите переключатель «Включить официальные планы Zhipu» выше.",
+  "settings.subscriptionUi": "Показывать подписки и планы",
+  "settings.subscriptionUiDescription":
+    "Если выключено, скрываются все точки входа для подписок, планов, квот и обновления, включая страницу планов в настройках и кнопку обновления в боковой панели. Вход в аккаунт и работа с моделями не затрагиваются.",
+  "settings.subscriptionUi.enabled": "Подписки и планы отображаются",
+  "settings.subscriptionUi.disabled": "Подписки и планы скрыты",
+  "settings.subscriptionUi.saveError": "Не удалось сохранить переключатель интерфейса подписок",
   "settings.modelProvider.templatePickerTitle": "Добавить провайдера",
   "settings.modelProvider.templateGroup.zhipu": "Zhipu",
   "settings.modelProvider.templateGroup.other": "Другие",

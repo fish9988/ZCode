@@ -63,6 +63,8 @@ interface UseModelProviderNavigationOptions {
   familyConnectionSettingsFailed?: boolean;
   subscribedTeamProducts?: EnterpriseCodingPlanProductDisplay[];
   showPurchasedTeamPlanFallback?: boolean;
+  /** 订阅界面总开关关闭时为 true：不再生成官方套餐导航项（含 Start Plan）。 */
+  hideOfficialPlanItems?: boolean;
   selectedNodeKey: string | null;
   setSelectedNodeKey: (key: string | null) => void;
   intl: ReturnType<typeof useZCodeIntl>["intl"];
@@ -84,6 +86,7 @@ export function useModelProviderNavigation({
   familyConnectionSettingsFailed = false,
   subscribedTeamProducts = [],
   showPurchasedTeamPlanFallback = false,
+  hideOfficialPlanItems = false,
   selectedNodeKey,
   setSelectedNodeKey,
   intl,
@@ -98,14 +101,18 @@ export function useModelProviderNavigation({
 
   const codingPlanItems = useMemo(
     () =>
-      CODING_PLAN_PROVIDER_SPECS.filter((spec) =>
-        shouldShowCodingPlanForProviderFamilyDomain(
-          spec.oauthProviderId,
-          // Bug 原因：国内无关联账号家族为空，Start 走“全部显示”分支，出现两个 Start 入口。
-          isStartPlanModelProviderId(spec.id) ? startPlanFamilyDomain : providerFamilyDomain,
-          availableFamilies,
-        ),
-      ).map((spec) => {
+      // 订阅界面关闭时整组套餐入口消失；provider 侧已被服务层过滤，这里补上
+      // 由 CODING_PLAN_PROVIDER_SPECS 直接派生的导航项（不依赖 providers 数组）。
+      hideOfficialPlanItems
+        ? []
+        : CODING_PLAN_PROVIDER_SPECS.filter((spec) =>
+            shouldShowCodingPlanForProviderFamilyDomain(
+              spec.oauthProviderId,
+              // Bug 原因：国内无关联账号家族为空，Start 走“全部显示”分支，出现两个 Start 入口。
+              isStartPlanModelProviderId(spec.id) ? startPlanFamilyDomain : providerFamilyDomain,
+              availableFamilies,
+            ),
+          ).map((spec) => {
         const provider = modelProviders.find((item) => item.providerId === spec.id) ?? null;
         const accountEntitled = entitledAccountProviderIds.has(spec.id);
         const entitlementProvider = pickCodingPlanEntitlementProvider(provider);
@@ -156,6 +163,7 @@ export function useModelProviderNavigation({
     [
       entitledAccountProviderIds,
       codingPlanEntitlements,
+      hideOfficialPlanItems,
       intl,
       modelProviders,
       modelProvidersLoading,

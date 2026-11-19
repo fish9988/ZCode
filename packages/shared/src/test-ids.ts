@@ -553,6 +553,16 @@ export const TID_MODEL_PROVIDER_MODEL_INPUT = "model-provider-model-input";
 export const TID_MODEL_PROVIDER_MODEL_DELETE_BUTTON = "model-provider-model-delete-button";
 /** 模型供应商添加模型按钮 */
 export const TID_MODEL_PROVIDER_ADD_MODEL_BUTTON = "model-provider-add-model-button";
+/** 模型设置分区顶部默认模型下拉触发器 */
+export const TID_SETTINGS_DEFAULT_MODEL_TRIGGER = "settings-default-model-trigger";
+/** 模型设置分区顶部默认模型的思考强度下拉触发器 */
+export const TID_SETTINGS_DEFAULT_MODEL_REASONING_TRIGGER = "settings-default-model-reasoning-trigger";
+/** 新对话优先使用默认模型开关 */
+export const TID_SETTINGS_PREFER_DEFAULT_MODEL_SWITCH = "settings-prefer-default-model-switch";
+/** 启用智谱官方 Plan 开关 */
+export const TID_SETTINGS_OFFICIAL_PLANS_SWITCH = "settings-official-plans-switch";
+/** 显示订阅与套餐入口开关 */
+export const TID_SETTINGS_SUBSCRIPTION_UI_SWITCH = "settings-subscription-ui-switch";
 
 // Chat Toolbar
 /** 聊天工具栏模型选择按钮 */

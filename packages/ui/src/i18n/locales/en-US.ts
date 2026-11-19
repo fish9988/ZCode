@@ -4477,6 +4477,35 @@ const enUS: Record<string, string> = {
   "settings.modelProvider.catalogProviderSearch": "Search providers",
   "settings.modelProvider.catalogProviderEmpty": "No providers found",
   "settings.modelProvider.addProviderAction": "Add provider",
+  "settings.defaultModel": "Default model",
+  "settings.defaultModelDescription":
+    "Set the global model used for new conversations. Choose Auto to follow the order of the available list.",
+  "settings.defaultModel.auto": "Automatic default model",
+  "settings.defaultModel.autoOption": "Auto (list order)",
+  "settings.defaultModel.reasoning": "Reasoning effort",
+  "settings.defaultModel.unavailable": "{model} (disabled or unavailable)",
+  "settings.defaultModel.cleared": "Reverted to automatic default model selection",
+  "settings.defaultModel.saved": "\"{model}\" is now the global default model",
+  "settings.defaultModel.saveError": "Failed to save the default model setting",
+  "settings.preferDefaultModel": "Always start new conversations with this model",
+  "settings.preferDefaultModelDescription":
+    "When on, every new conversation uses the default model above. When off, the model last used in the project is preferred.",
+  "settings.preferDefaultModel.saveError": "Failed to save the new-conversation model preference",
+  "settings.officialPlans": "Enable official Zhipu plans (BigModel / Start Plan)",
+  "settings.officialPlansDescription":
+    "When off, BigModel / Start Plan / Z.ai official plans are hidden from the model picker, default selection, and fallback. Only custom providers are used.",
+  "settings.officialPlans.enabled": "Official Zhipu plans enabled (BigModel / Start Plan)",
+  "settings.officialPlans.disabled":
+    "Official Zhipu plans disabled; chats will use custom providers only",
+  "settings.officialPlans.saveError": "Failed to save the official plan switch",
+  "settings.officialPlans.disabledHint":
+    "Official Zhipu plans are disabled: models in this group are hidden from the chat model list and are not used as default or fallback models. To restore them, turn on \"Enable official Zhipu plans\" above.",
+  "settings.subscriptionUi": "Show subscription and plan entry points",
+  "settings.subscriptionUiDescription":
+    "When off, all subscription, plan, quota, and upgrade entry points are hidden, including the plan page in settings and the sidebar upgrade button. Account sign-in and model usage are unaffected.",
+  "settings.subscriptionUi.enabled": "Subscription and plan entry points shown",
+  "settings.subscriptionUi.disabled": "Subscription and plan entry points hidden",
+  "settings.subscriptionUi.saveError": "Failed to save the subscription UI switch",
   "settings.modelProvider.templatePickerTitle": "Add provider",
   "settings.modelProvider.templateGroup.zhipu": "Zhipu",
   "settings.modelProvider.templateGroup.other": "Other",

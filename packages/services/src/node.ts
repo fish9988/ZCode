@@ -1751,6 +1751,24 @@ export function createLocalServices(options: {
       return (await settingService.get()).officialPlansEnabled !== false;
     },
   };
+  // 订阅界面开关：关闭时 Provider Settings View 不再包含官方套餐 provider，
+  // 套餐卡片 / 额度条 / 升级入口 / 用量套餐页随之一起消失。
+  const subscriptionUiPolicyListeners = new Set<() => void>();
+  const subscriptionUiPolicy = {
+    async isEnabled() {
+      return (await settingService.get()).subscriptionUiEnabled !== false;
+    },
+    onDidChange(listener: () => void) {
+      subscriptionUiPolicyListeners.add(listener);
+      return () => {
+        subscriptionUiPolicyListeners.delete(listener);
+      };
+    },
+  };
+  const disposeSubscriptionUiInvalidation = settingService.onDidUpdate((event) => {
+    if (!event.keys.includes("subscriptionUiEnabled")) return;
+    for (const listener of subscriptionUiPolicyListeners) listener();
+  });
   const providerProvisioningSource = createProviderProvisioningSource({
     cipherProvider: credentialCipherProvider,
     personalRepository: providerConfigRuntime.personalRepository,
@@ -1796,6 +1814,7 @@ export function createLocalServices(options: {
     modelSelectionConfiguredDefaultSource,
     disposeModelSelectionConfiguredDefaultSource: () => nodeModelSelectionConfigRepo.dispose(),
     officialPlansPolicy,
+    subscriptionUiPolicy,
     testConnectivity: createProviderSettingsConnectivityTester({
       testModelConnectivity: async (input) => {
         if (!providerConnectivityAgentService) {
@@ -1807,6 +1826,7 @@ export function createLocalServices(options: {
     disposeAccountSource: () => {
       disposeAccountProviderInvalidation();
       accountProviderRefreshErrorDispose();
+      disposeSubscriptionUiInvalidation();
       accountProviderConfigSource.dispose();
     },
   });

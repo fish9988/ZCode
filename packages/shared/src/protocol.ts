@@ -354,6 +354,11 @@ export interface AppSettings {
   enabledBuiltinAgentCliProviders?: ZCodeProvider[];
   /** 是否启用智谱 / Z.ai 官方 Plan（BigModel / Start Plan 等）；缺失按 true 兼容旧设置。 */
   officialPlansEnabled?: boolean;
+  /**
+   * 是否显示订阅/计费相关界面（套餐卡片、额度条、升级入口、用量套餐页等）；缺失按 true。
+   * 与 officialPlansEnabled 正交：前者决定界面是否出现，后者决定套餐模型是否可用。
+   */
+  subscriptionUiEnabled?: boolean;
   /** 全局默认模型配置；null 表示显式清空回到自动选择。 */
   defaultModelSelection?: import("./model-selection.js").ModelSelection | null;
   /** 设置了默认模型时，新建对话是否优先使用该默认模型（忽略项目最近使用记忆）；缺失按 true。 */

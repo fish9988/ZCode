@@ -8,6 +8,10 @@ import {
   DEFAULT_LOCALE,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   TEST_ZCODE_ENDPOINT_ORIGIN,
+  ZCODE_UPDATE_GITHUB_OWNER,
+  ZCODE_UPDATE_GITHUB_REPO,
+  ZCODE_UPDATE_PROVIDER,
+  ZCODE_UPDATE_ALLOW_UNSIGNED_WINDOWS,
   PlatformChannels,
   ZCODE_VERSION,
   desktopMenuMessageIds,
@@ -21,7 +25,7 @@ import {
   type UpdateStatePayload,
 } from "@zcode/shared";
 import { logger } from "./logger.js";
-import { verifyWindowsAuthenticodeSignature } from "../../scripts/powershell-command.mjs";
+import { verifyWindowsUpdateSignature } from "../../scripts/powershell-command.mjs";
 import { ManifestUpdateProvider, getElectronReleasePlatform } from "./manifestUpdateProvider.js";
 
 export const CHECK_FOR_UPDATE_MENU_ID = "check-for-update";
@@ -494,8 +498,11 @@ async function quitAndInstallUpdate(rejectUnavailable = false) {
       const installerPath = (autoUpdater as unknown as { readonly installerPath: string | null })
         .installerPath;
       if (!installerPath) throw new Error("Windows update installer is missing");
-      const failure = await verifyWindowsAuthenticodeSignature(installerPath);
-      if (failure) throw new Error(failure);
+      const verification = await verifyWindowsUpdateSignature(installerPath, {
+        allowUnsigned: ZCODE_UPDATE_ALLOW_UNSIGNED_WINDOWS,
+      });
+      logUnsignedWindowsUpdateAcceptance(verification, "install");
+      if (verification.failure) throw new Error(verification.failure);
     } catch (error) {
       quitAndInstallState = "idle";
       handleAutoUpdateFailure(error, "Windows update signature verification failed");
@@ -801,6 +808,10 @@ export function resolveUpdateFeedSourceFromStartupConfig(
 async function resolveUpdateReleaseChannel(
   settingService: SettingServiceLike | undefined,
 ): Promise<ElectronReleaseChannel> {
+  // fork 只发布 stable 清单（latest.yml），preview 设置在这里没有对应产物。
+  if (ZCODE_UPDATE_PROVIDER === "github") {
+    return "stable";
+  }
   if (!settingService) {
     return "stable";
   }
@@ -835,7 +846,39 @@ async function syncAutoUpdateCheckChannelFromSettings(
   activeAutoUpdateCheckChannel = nextChannel;
 }
 
-function applyManifestUpdateProvider(options: InitAutoUpdaterOptions): void {
+function logUnsignedWindowsUpdateAcceptance(
+  verification: { acceptedUnsigned: boolean; status: number },
+  stage: "download" | "install",
+): void {
+  if (!verification.acceptedUnsigned) return;
+  // 只在放行时记录，失败分支由调用方抛错，避免同一原因重复写日志。
+  logger.warn(
+    `[auto-update] accept unsigned Windows update package at ${stage} (status=${verification.status}); manifest checksum is still enforced`,
+  );
+}
+
+function applyUpdateFeedProvider(options: InitAutoUpdaterOptions): void {
+  // fork 的 GitHub Releases 通道由 resources/app-update.yml 描述，electron-updater 会自行装配
+  // GitHubProvider；这里不能再调用 setFeedURL，否则会覆盖成服务端 manifest provider。
+  if (ZCODE_UPDATE_PROVIDER === "github") {
+    if (options.updateFeedSource?.url.trim()) {
+      logger.warn(
+        "[auto-update] ignore update feed override: github provider reads resources/app-update.yml",
+      );
+    }
+    const repository =
+      ZCODE_UPDATE_GITHUB_OWNER && ZCODE_UPDATE_GITHUB_REPO
+        ? `${ZCODE_UPDATE_GITHUB_OWNER}/${ZCODE_UPDATE_GITHUB_REPO}`
+        : "<unset>";
+    logger.info(
+      `[auto-update] github provider applied platform=${getElectronReleasePlatform()} repo=${repository} channel=stable`,
+    );
+    // fork 只发布 stable；不设置 autoUpdater.channel，让 electron-updater 使用默认的 latest.yml。
+    availableUpdateChannel = "stable";
+    activeAutoUpdateCheckChannel = "stable";
+    return;
+  }
+
   // 在更新器装配边界再次约束，避免内部调用绕过启动配置解析。
   const manifestUrl = app.isPackaged ? undefined : options.updateFeedSource?.url.trim();
   autoUpdater.setFeedURL({
@@ -1534,6 +1577,12 @@ export function refreshAutoUpdaterReleaseChannel(
   reason = "settings receivePreviewUpdates changed",
 ) {
   if (quitAndInstallState !== "idle") return;
+  if (ZCODE_UPDATE_PROVIDER === "github") {
+    // fork 的 Releases 只有一个通道，没有 preview 清单可切；这里直接忽略设置变更，
+    // 避免检查被误导到不存在的 latest-preview.yml。
+    logger.info(`[auto-update] skip ${reason}: github provider has a single stable channel`);
+    return;
+  }
   const nextChannel: ElectronReleaseChannel = receivePreviewUpdates ? "preview" : "stable";
 
   if (!canUseAutoUpdaterInCurrentRuntime()) {
@@ -1688,10 +1737,15 @@ export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Pro
   autoUpdater.logger = logger;
   if (autoUpdater instanceof pkg.NsisUpdater) {
     // 保留包内 publisherName 来激活 NSIS hook，但不把旧 DN 当作未来换证的准入条件。
-    autoUpdater.verifyUpdateCodeSignature = (_publisherNames, filePath) =>
-      verifyWindowsAuthenticodeSignature(filePath);
+    autoUpdater.verifyUpdateCodeSignature = async (_publisherNames, filePath) => {
+      const verification = await verifyWindowsUpdateSignature(filePath, {
+        allowUnsigned: ZCODE_UPDATE_ALLOW_UNSIGNED_WINDOWS,
+      });
+      logUnsignedWindowsUpdateAcceptance(verification, "download");
+      return verification.failure;
+    };
   }
-  applyManifestUpdateProvider(options);
+  applyUpdateFeedProvider(options);
 
   const triggerCheckForUpdates = (reason: string) => {
     if (quitAndInstallState !== "idle") return;

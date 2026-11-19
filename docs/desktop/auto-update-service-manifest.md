@@ -6,6 +6,15 @@
 
 CDN 仍保存安装包、blockmap 和更新清单文件，但这些文件只进入版本化目录，不再由 CI 覆盖全局 stable feed。服务端 manifest 根据 release API 中的 stable / preview 状态选择版本，并下发指向版本化平台目录的绝对 CDN URL。
 
+## Fork 模式不启用 manifest provider
+
+服务端 manifest 是正式发布通道，发布授权绑定在官方 HTTPS 入口上：打包态的更新源 origin
+只接受官方域名，调试用的 feed 覆盖在打包态一律忽略。以自建分发为目标的 fork 构建改用
+`electron-updater` 内置的 GitHub provider，不再装配这里的 `ManifestUpdateProvider`，
+由 `ZCODE_UPDATE_PROVIDER=github` 在构建期选择。两条通道互斥，详见
+[Fork 构建的自动更新](./fork-auto-update.md)。本文档描述的接口、鉴权、通道灰度与状态机
+仍只描述 `ZCODE_UPDATE_PROVIDER=manifest`（默认值）的行为。
+
 ## 更新网络出口
 
 CA PEM 文件可以包含完整服务链或“根 CA + 服务端叶证书”。常规建链仅把具备 CA 签发资格的配置证书作为锚，附带的非 CA 服务证书不能抢先成为锚而破坏合法链；完整配置集仍用于显式自签名服务证书的逐字匹配。非 CA、非自签名叶证书不能单独作为 pin 绕过链校验。

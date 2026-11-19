@@ -94,9 +94,15 @@ export {
   ZCODE_ARMS_RUM_ENDPOINT,
   ZCODE_TELEMETRY_REPORT_ENDPOINT,
   ZCODE_AUTO_UPDATE_ENABLED,
+  ZCODE_UPDATE_PROVIDER,
+  ZCODE_UPDATE_GITHUB_OWNER,
+  ZCODE_UPDATE_GITHUB_REPO,
+  ZCODE_UPDATE_ALLOW_UNSIGNED_WINDOWS,
+  ZCODE_UPDATE_FORCE_GATE_ENABLED,
   mapZCodeEnvToArmsRumEnv,
   normalizeZCodeEnv,
   normalizeZCodeProductFlavor,
+  normalizeZCodeUpdateProvider,
 } from "./env.js";
 export * from "./errors.js";
 export {

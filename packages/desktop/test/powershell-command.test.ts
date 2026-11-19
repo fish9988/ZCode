@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import {
   verifyWindowsAuthenticodeSignature,
+  verifyWindowsUpdateSignature,
   createEncodedPowerShellArgs,
   createWindowsPowerShellSecurityArgs,
   escapePowerShellLiteral,
@@ -257,4 +258,79 @@ describe("Windows Authenticode 有效性校验", () => {
     },
     30_000,
   );
+});
+
+// 签名状态取值来自 PowerShell Get-AuthenticodeSignature 的 SignatureStatus。
+const STATUS_VALID = 0;
+const STATUS_UNKNOWN_ERROR = 1;
+const STATUS_NOT_SIGNED = 2;
+const STATUS_HASH_MISMATCH = 3;
+const STATUS_NOT_TRUSTED = 4;
+
+describe("更新包签名策略（fork 放行无签名）", () => {
+  it("有效签名直接放行，且不标记为无签名放行", async () => {
+    const spy = mockSignatureQuery({ status: STATUS_VALID, subject: "CN=ZCode" });
+    try {
+      await expect(
+        verifyWindowsUpdateSignature("C:\\example.exe", { allowUnsigned: true }),
+      ).resolves.toEqual({ failure: null, acceptedUnsigned: false, status: STATUS_VALID });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it.each([STATUS_UNKNOWN_ERROR, STATUS_NOT_SIGNED])(
+    "默认构建拒绝无签名包（status=%i）",
+    async (status) => {
+      const spy = mockSignatureQuery({ status, subject: null });
+      try {
+        const result = await verifyWindowsUpdateSignature("C:\\example.exe");
+        expect(result.failure).toBe("Windows update requires a valid Authenticode signature");
+        expect(result.acceptedUnsigned).toBe(false);
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it.each([STATUS_UNKNOWN_ERROR, STATUS_NOT_SIGNED])(
+    "开关打开时放行无签名包（status=%i）",
+    async (status) => {
+      const spy = mockSignatureQuery({ status, subject: null });
+      try {
+        await expect(
+          verifyWindowsUpdateSignature("C:\\example.exe", { allowUnsigned: true }),
+        ).resolves.toEqual({ failure: null, acceptedUnsigned: true, status });
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it.each([STATUS_HASH_MISMATCH, STATUS_NOT_TRUSTED])(
+    "即使开关打开也拒绝内容或签发者不可信（status=%i）",
+    async (status) => {
+      const spy = mockSignatureQuery({ status, subject: "CN=Unrelated" });
+      try {
+        const result = await verifyWindowsUpdateSignature("C:\\example.exe", {
+          allowUnsigned: true,
+        });
+        expect(result.failure).toBe("Windows update requires a valid Authenticode signature");
+      } finally {
+        spy.mockRestore();
+      }
+    },
+  );
+
+  it("Valid 状态但缺少签名者主语时按不可信处理", async () => {
+    const spy = mockSignatureQuery({ status: STATUS_VALID, subject: "  " });
+    try {
+      const result = await verifyWindowsUpdateSignature("C:\\example.exe", {
+        allowUnsigned: true,
+      });
+      expect(result.failure).not.toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });

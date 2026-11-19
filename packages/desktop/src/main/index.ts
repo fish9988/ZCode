@@ -86,6 +86,7 @@ import {
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
   ZCODE_AUTO_UPDATE_ENABLED,
+  ZCODE_UPDATE_FORCE_GATE_ENABLED,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DEFAULT_LOCALE,
   toZhOrEnLocale,
@@ -2736,8 +2737,13 @@ app.whenReady().then(async () => {
   // 是面向打包发布客户端的安全门，对未打包 dev 运行时无意义。打包版 app.isPackaged === true，
   // gate 照常生效，对真实用户零影响。
   const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
+  // fork 的版本号落后于线上 release，指向官方接口的强更 gate 会让安装包启动即退出；
+  // 构建期用 ZCODE_UPDATE_FORCE_GATE=0 显式跳过，默认仍保持上游的强更行为。
+  const skipForceUpdateForBuildConfig = !ZCODE_UPDATE_FORCE_GATE_ENABLED;
   const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
+    ZCODE_PRODUCT_FLAVOR === "production" &&
+    !skipForceUpdateForLocalDevRuntime &&
+    !skipForceUpdateForBuildConfig
       ? await maybeBlockStartupForForceUpdate({
           resolveZcodeJwtToken: () => autoUpdateCredentialService.load("zcodejwttoken"),
           locale: currentApplicationLocale,
@@ -2752,6 +2758,8 @@ app.whenReady().then(async () => {
     logger.info("[force-update] Preview 跳过远端强制升级检查");
   } else if (skipForceUpdateForLocalDevRuntime) {
     logger.info("[force-update] 本地 dev 构建（未打包）跳过远端强制升级检查");
+  } else if (skipForceUpdateForBuildConfig) {
+    logger.info("[force-update] 已按构建开关跳过远端强制升级检查");
   }
   if (forceUpdateGuardResult.blocked) {
     return;

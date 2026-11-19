@@ -174,6 +174,31 @@ export const SETTINGS_SEARCH_ITEMS = [
     description: "settings.messageStreamShowTodosDescription",
     visibility: "all",
   },
+  // 模型设置分区顶部四行（docs/ui/default-model-and-subscription-ui.md）。
+  {
+    id: "settings.defaultModel",
+    section: "modelProvider",
+    description: "settings.defaultModelDescription",
+    visibility: "all",
+  },
+  {
+    id: "settings.preferDefaultModel",
+    section: "modelProvider",
+    description: "settings.preferDefaultModelDescription",
+    visibility: "all",
+  },
+  {
+    id: "settings.officialPlans",
+    section: "modelProvider",
+    description: "settings.officialPlansDescription",
+    visibility: "all",
+  },
+  {
+    id: "settings.subscriptionUi",
+    section: "modelProvider",
+    description: "settings.subscriptionUiDescription",
+    visibility: "all",
+  },
   {
     id: "settings.themeMode",
     section: "appearance",

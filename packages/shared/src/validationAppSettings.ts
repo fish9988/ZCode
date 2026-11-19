@@ -575,6 +575,8 @@ const appSettingsObjectSchema = z.object({
   ]),
   startPlanRecommendationDismissed: z.boolean().default(false),
   officialPlansEnabled: z.boolean().optional(),
+  // 与 officialPlansEnabled 一样必须声明在完整 schema，否则合并后显式 false 会被剥离。
+  subscriptionUiEnabled: z.boolean().optional(),
   defaultModelSelection: modelSelectionSchema.nullish(),
   preferDefaultModelForNewTasks: z.boolean().optional(),
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.default({}),
@@ -675,6 +677,8 @@ export const appSettingsPatchSchema = z.object({
   enabledBuiltinAgentCliProviders: enabledBuiltinAgentCliProvidersSchema.optional(),
   startPlanRecommendationDismissed: z.boolean().optional(),
   officialPlansEnabled: z.boolean().optional(),
+  // 与 officialPlansEnabled 一样必须声明在完整 schema，否则合并后显式 false 会被剥离。
+  subscriptionUiEnabled: z.boolean().optional(),
   defaultModelSelection: modelSelectionSchema.nullish(),
   preferDefaultModelForNewTasks: z.boolean().optional(),
   providerFamilyConnectionSelections: providerFamilyConnectionSelectionSettingsSchema.optional(),

@@ -406,6 +406,8 @@ export function ModelProviderSection({
     error: sharedSettingsError,
     update: updateSharedSettings,
   } = useSettings();
+  // 订阅界面总开关：关闭时套餐导航、卡片与购买入口一并隐藏；缺失按开启以兼容旧设置。
+  const subscriptionUiEnabled = sharedSettings?.subscriptionUiEnabled !== false;
   const authenticatedEnterpriseProducts = useEnterpriseCodingPlanProducts({
     enabled:
       codingPlanPurchaseTokenAuthenticatedByProviderId[
@@ -600,17 +602,20 @@ export function ModelProviderSection({
 
   const presetProviders = useMemo(
     () =>
-      PRESET_PROVIDER_SPECS.filter((preset) =>
-        shouldShowPresetProviderForActiveOAuth(
-          preset.id,
-          effectiveProviderFamilyDomain,
-          accountAvailability?.families,
-        ),
-      ).map((preset) => ({
-        ...preset,
-        provider: modelProviders.find((provider) => provider.providerId === preset.id) ?? null,
-      })),
-    [effectiveProviderFamilyDomain, accountAvailability, modelProviders],
+      // 订阅界面关闭时 Start Plan 预设入口一并消失（PRESET_PROVIDER_SPECS 只有两个官方家族条目）。
+      subscriptionUiEnabled
+        ? PRESET_PROVIDER_SPECS.filter((preset) =>
+            shouldShowPresetProviderForActiveOAuth(
+              preset.id,
+              effectiveProviderFamilyDomain,
+              accountAvailability?.families,
+            ),
+          ).map((preset) => ({
+            ...preset,
+            provider: modelProviders.find((provider) => provider.providerId === preset.id) ?? null,
+          }))
+        : [],
+    [subscriptionUiEnabled, effectiveProviderFamilyDomain, accountAvailability, modelProviders],
   );
 
   useEffect(() => {
@@ -691,6 +696,8 @@ export function ModelProviderSection({
       connectionSelections: effectiveConnectionSelections,
       pendingConnectionSelections,
       showPurchasedTeamPlanFallback,
+      // 订阅界面关闭时左侧导航不再生成官方套餐与 Start Plan 入口。
+      hideOfficialPlanItems: subscriptionUiEnabled === false,
       familyConnectionSettingsLoading: sharedSettingsLoading && sharedSettings === null,
       familyConnectionSettingsFailed,
       selectedNodeKey,
@@ -1179,7 +1186,7 @@ export function ModelProviderSection({
       selectedNavItem.type !== "custom" &&
       !templatePickerOpen ? (
         <div className="mb-4 rounded-lg border border-border bg-surface px-3.5 py-2.5 text-ui-base text-foreground-subtle">
-          智谱官方 Plan 已停用：该分组下的模型不会出现在聊天模型列表中，也不会作为默认或回退模型使用。如需恢复，请打开上方的「启用智谱官方 Plan」开关。
+          {intl.formatMessage({ id: "settings.officialPlans.disabledHint" })}
         </div>
       ) : null}
       {templatePickerOpen ? (

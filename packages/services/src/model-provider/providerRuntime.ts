@@ -24,6 +24,7 @@ import {
   type ModelSelectionConfiguredDefaultSource,
   type OfficialPlansPolicy,
   type ProviderSettingsConnectivityTester,
+  type SubscriptionUiPolicy,
 } from "./providerFacadeServices.js";
 import { createServiceLogger } from "#src/logger/serviceLogger.js";
 
@@ -42,6 +43,7 @@ export interface ProviderRuntimeDependencies {
   readonly modelSelectionConfiguredDefaultSource?: ModelSelectionConfiguredDefaultSource;
   readonly disposeModelSelectionConfiguredDefaultSource?: () => void;
   readonly officialPlansPolicy?: OfficialPlansPolicy;
+  readonly subscriptionUiPolicy?: SubscriptionUiPolicy;
 }
 
 interface RefreshableProviderSource<TSnapshot> extends ProviderSource<TSnapshot> {
@@ -74,6 +76,7 @@ export class ProviderRuntime {
   readonly #disposeAccountSource?: () => void;
   readonly #disposeBuiltinRecovery: () => void;
   readonly #modelSelectionRuntime: IModelSelectionService & { dispose(): void };
+  readonly #providerSettingsRuntime: IProviderSettingsService & { dispose(): void };
   readonly #disposeModelSelectionConfiguredDefaultSource?: () => void;
   #startPromise: ReturnType<ProviderRegistryService["start"]> | null = null;
   #disposed = false;
@@ -106,11 +109,14 @@ export class ProviderRuntime {
     );
     const ensureReady = () => this.start();
     const settingsFacade = new ProviderSettingsFacade(this.registryService, mutations);
-    this.providerSettings = createProviderSettingsService(
+    const providerSettingsRuntime = createProviderSettingsService(
       settingsFacade,
       ensureReady,
       dependencies.testConnectivity,
+      dependencies.subscriptionUiPolicy,
     );
+    this.#providerSettingsRuntime = providerSettingsRuntime;
+    this.providerSettings = providerSettingsRuntime;
     this.#modelSelectionRuntime = createModelSelectionService(
       createNodeModelSelectionFacade(this.registryService),
       ensureReady,
@@ -135,6 +141,7 @@ export class ProviderRuntime {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#disposeBuiltinRecovery();
+    this.#providerSettingsRuntime.dispose();
     this.#modelSelectionRuntime.dispose();
     this.registryService.dispose();
     this.#disposeAccountSource?.();

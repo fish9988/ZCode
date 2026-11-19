@@ -108,6 +108,16 @@ export interface OfficialPlansPolicy {
   onDidChange?(listener: () => void): () => void;
 }
 
+/**
+ * 订阅界面开关：关闭时把官方套餐 provider 从 Provider Settings View 中移除，
+ * 从而一次性隐藏套餐卡片、额度条、升级入口与用量套餐页。与 OfficialPlansPolicy
+ * 正交 —— 后者管套餐模型是否可用，本策略只管界面是否出现。
+ */
+export interface SubscriptionUiPolicy {
+  isEnabled(): Promise<boolean> | boolean;
+  onDidChange?(listener: () => void): () => void;
+}
+
 export const IModelSelectionService = createServiceDescriptor<IModelSelectionService>(
   ServiceChannels.ModelSelection,
 );
@@ -116,20 +126,84 @@ export function createProviderSettingsService(
   facade: ProviderSettingsFacade,
   ensureReady: () => Promise<void> = async () => {},
   testConnectivity?: ProviderSettingsConnectivityTester,
-): IProviderSettingsService {
+  subscriptionUiPolicy?: SubscriptionUiPolicy,
+): IProviderSettingsService & { dispose(): void } {
+  const listeners = new Set<(view: ProviderSettingsView) => void>();
+  let disposed = false;
+  /**
+   * 关闭订阅界面时把官方套餐 provider 从视图里过滤掉。
+   * 必须作用在所有返回视图的路径上：UI 会把 mutation 返回值直接提交进共享快照，
+   * 只过滤 getView 会让一次保存又把套餐卡片带回来。
+   */
+  const projectView = async (view: ProviderSettingsView): Promise<ProviderSettingsView> => {
+    if (!subscriptionUiPolicy) return view;
+    if (await subscriptionUiPolicy.isEnabled()) return view;
+    const providers = Object.freeze(
+      view.providers.filter(
+        (provider) =>
+          !isOfficialPlanProvider({
+            providerId: provider.providerId,
+            group: provider.effectiveConfig.group,
+            access: provider.effectiveConfig.access,
+          }),
+      ),
+    );
+    const visibleProviderIds = new Set(providers.map((provider) => provider.providerId));
+    return Object.freeze({
+      revision: view.revision,
+      providerTemplates: view.providerTemplates,
+      providerOrder: Object.freeze(
+        view.providerOrder.filter((providerId) => visibleProviderIds.has(providerId)),
+      ),
+      providers,
+    });
+  };
+  const emit = (view: ProviderSettingsView): void => {
+    if (disposed) return;
+    void projectView(view).then(
+      (projected) => {
+        if (disposed) return;
+        for (const listener of listeners) listener(projected);
+      },
+      () => {
+        // 过滤失败时退回原始视图，避免一次读取异常吞掉所有 provider 变更事件。
+        if (disposed) return;
+        for (const listener of listeners) listener(view);
+      },
+    );
+  };
+  const disposeFacade = facade.onDidChange(emit);
+  // 开关切换不需要等下一次 provider 变更：由策略主动重发当前视图。
+  const disposePolicy = subscriptionUiPolicy?.onDidChange?.(() => emit(facade.getView()));
+
   return {
-    onDidChange: toEvent((listener) => facade.onDidChange(listener)),
+    onDidChange: (listener) => {
+      listeners.add(listener);
+      return {
+        dispose: () => {
+          listeners.delete(listener);
+        },
+      };
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      disposeFacade();
+      disposePolicy?.();
+      listeners.clear();
+    },
     getView: async () => {
       await ensureReady();
-      return facade.getView();
+      return projectView(facade.getView());
     },
     refresh: async (reason) => {
       await ensureReady();
-      return facade.refresh(reason);
+      return projectView(await facade.refresh(reason));
     },
     createPersonalProvider: async (input) => {
       await ensureReady();
-      return facade.createPersonalProvider(input);
+      const result = await facade.createPersonalProvider(input);
+      return { ...result, view: await projectView(result.view) };
     },
     resolveModelConfig: async (input) => {
       await ensureReady();
@@ -137,39 +211,41 @@ export function createProviderSettingsService(
     },
     savePersonalProviderOverlay: async (providerId, config, metadata) => {
       await ensureReady();
-      return facade.savePersonalProviderOverlay(providerId, config, metadata);
+      return projectView(await facade.savePersonalProviderOverlay(providerId, config, metadata));
     },
     deletePersonalProvider: async (providerId) => {
       await ensureReady();
-      return facade.deletePersonalProvider(providerId);
+      return projectView(await facade.deletePersonalProvider(providerId));
     },
     reorderPersonalProviders: async (providerIds) => {
       await ensureReady();
-      return facade.reorderPersonalProviders(providerIds);
+      return projectView(await facade.reorderPersonalProviders(providerIds));
     },
     reorderPersonalModels: async (providerId, modelIds) => {
       await ensureReady();
-      return facade.reorderPersonalModels(providerId, modelIds);
+      return projectView(await facade.reorderPersonalModels(providerId, modelIds));
     },
     addPersonalModel: async (providerId, modelId, config, useRecommendedConfig) => {
       await ensureReady();
-      return facade.addPersonalModel(providerId, modelId, config, useRecommendedConfig);
+      return projectView(
+        await facade.addPersonalModel(providerId, modelId, config, useRecommendedConfig),
+      );
     },
     renamePersonalModel: async (providerId, currentModelId, nextModelId) => {
       await ensureReady();
-      return facade.renamePersonalModel(providerId, currentModelId, nextModelId);
+      return projectView(await facade.renamePersonalModel(providerId, currentModelId, nextModelId));
     },
     deletePersonalModel: async (providerId, modelId) => {
       await ensureReady();
-      return facade.deletePersonalModel(providerId, modelId);
+      return projectView(await facade.deletePersonalModel(providerId, modelId));
     },
     savePersonalModelDraft: async (input) => {
       await ensureReady();
-      return facade.savePersonalModelDraft(input);
+      return projectView(await facade.savePersonalModelDraft(input));
     },
     setPersonalModelEnabled: async (providerId, modelId, enabled) => {
       await ensureReady();
-      return facade.setPersonalModelEnabled(providerId, modelId, enabled);
+      return projectView(await facade.setPersonalModelEnabled(providerId, modelId, enabled));
     },
     testModelConnectivity: async (input) => {
       await ensureReady();
@@ -323,12 +399,5 @@ export function createModelSelectionService(
       disposeOfficialPlansPolicy?.();
       listeners.clear();
     },
-  };
-}
-
-function toEvent<T>(subscribe: (listener: (event: T) => void) => () => void): Event<T> {
-  return (listener) => {
-    const dispose = subscribe(listener);
-    return { dispose };
   };
 }

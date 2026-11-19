@@ -94,6 +94,8 @@ export function useWorkspaceSidebarFooterUsageSummaryState({
   workspacePath?: string;
 }) {
   const { settings: sharedSettings } = useSettings();
+  // 订阅界面关闭时套餐菜单项与头像徽标隐藏；缺失按开启以兼容旧设置。
+  const subscriptionUiEnabled = sharedSettings?.subscriptionUiEnabled !== false;
   const providerFamilyDomain = normalizeProviderFamilyDomain(sharedSettings?.providerFamilyDomain);
   const providerSettingsRead = useProviderSettingsView();
   const providerSettingsView =
@@ -405,8 +407,9 @@ export function useWorkspaceSidebarFooterUsageSummaryState({
     availableCodingPlanProviders,
     providerSourcesLoading,
     providerEntitlements,
-    profilePlanBadge,
+    profilePlanBadge: subscriptionUiEnabled ? profilePlanBadge : null,
     selectedProviderId,
+    subscriptionUiEnabled,
     upgradeTargetProviderId,
     usageState: visibleUsageState,
   };
@@ -440,44 +443,49 @@ export function WorkspaceSidebarFooterUsageSummaryContent({
 
   return (
     <>
-      <DropdownMenuSeparator />
-      <DropdownMenuItem
-        data-testid={TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON}
-        onSelect={() => {
-          setPendingSettingsUsageIntent();
-          onUsageClick?.();
-        }}
-      >
-        <BarChart3Icon className="size-4" />
-        {intl.formatMessage({ id: "sidebar.usage.plan.openStats" })}
-      </DropdownMenuItem>
-      {/* 产品要求：升级入口始终显示；未解析出当前套餐时由当前 provider family 决定品牌。 */}
-      <DropdownMenuItem
-        data-testid={TID_SIDEBAR_CODING_PLAN_UPGRADE_BUTTON}
-        disabled={entryGate.status === "loading"}
-        aria-busy={entryGate.status === "loading"}
-        onSelect={() => {
-          if (entryGate.status !== "ready") {
-            entryGate.retry?.();
-            return;
-          }
-          onUpgradeClick?.(
-            upgradeTargetProviderId,
-            createCodingPlanFunnelContext({
-              providerId: upgradeTargetProviderId,
-              upgradeSource: "profile_menu",
-              eventRegion: "app.profile",
-              eventText: intl.formatMessage({ id: upgradeActionLabelId }),
-              entryPlanState: resolveCodingPlanEntryPlanState({
-                snapshot: upgradeProviderSnapshot,
-              }),
-            }),
-          );
-        }}
-      >
-        <RocketIcon className="size-4" />
-        {entryGate.label ?? intl.formatMessage({ id: upgradeActionLabelId })}
-      </DropdownMenuItem>
+      {state.subscriptionUiEnabled ? (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            data-testid={TID_SIDEBAR_CODING_PLAN_USAGE_BUTTON}
+            onSelect={() => {
+              setPendingSettingsUsageIntent();
+              onUsageClick?.();
+            }}
+          >
+            <BarChart3Icon className="size-4" />
+            {intl.formatMessage({ id: "sidebar.usage.plan.openStats" })}
+          </DropdownMenuItem>
+          {/* 产品要求：升级入口始终显示；未解析出当前套餐时由当前 provider family 决定品牌。
+              订阅界面总开关关闭时整组隐藏，账号登录与模型使用不受影响。 */}
+          <DropdownMenuItem
+            data-testid={TID_SIDEBAR_CODING_PLAN_UPGRADE_BUTTON}
+            disabled={entryGate.status === "loading"}
+            aria-busy={entryGate.status === "loading"}
+            onSelect={() => {
+              if (entryGate.status !== "ready") {
+                entryGate.retry?.();
+                return;
+              }
+              onUpgradeClick?.(
+                upgradeTargetProviderId,
+                createCodingPlanFunnelContext({
+                  providerId: upgradeTargetProviderId,
+                  upgradeSource: "profile_menu",
+                  eventRegion: "app.profile",
+                  eventText: intl.formatMessage({ id: upgradeActionLabelId }),
+                  entryPlanState: resolveCodingPlanEntryPlanState({
+                    snapshot: upgradeProviderSnapshot,
+                  }),
+                }),
+              );
+            }}
+          >
+            <RocketIcon className="size-4" />
+            {entryGate.label ?? intl.formatMessage({ id: upgradeActionLabelId })}
+          </DropdownMenuItem>
+        </>
+      ) : null}
     </>
   );
 }

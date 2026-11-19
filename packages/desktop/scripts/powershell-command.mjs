@@ -103,3 +103,36 @@ export async function verifyWindowsAuthenticodeSignature(filePath) {
   }
   return null;
 }
+
+/**
+ * 允许构建期放宽「无签名」的安装包校验（fork 没有代码签名证书），
+ * 但保留哈希不匹配与不受信任签发者两条拒绝条件，`latest.yml` 的 sha512 校验也仍然生效。
+ * 返回值区分「直接放行」与「因开关放行」，让调用方只在放行时记录说明。
+ */
+const WINDOWS_SIGNATURE_STATUS_UNKNOWN_ERROR = 1;
+const WINDOWS_SIGNATURE_STATUS_NOT_SIGNED = 2;
+
+export async function verifyWindowsUpdateSignature(filePath, options = {}) {
+  const signature = await readWindowsAuthenticodeSignature(filePath);
+  const hasSubject = typeof signature.subject === "string" && signature.subject.trim().length > 0;
+  const allowUnsigned = options.allowUnsigned === true;
+
+  if (signature.status === 0 && hasSubject) {
+    return { failure: null, acceptedUnsigned: false, status: signature.status };
+  }
+
+  // 真实机器上未签名文件由 Get-AuthenticodeSignature 报 UnknownError(1)，显式 NotSigned(2) 少见；
+  // 两种都只表示「没有可用签名」，可以在开关打开时放行。HashMismatch(3)/NotTrusted(4) 不在放宽范围内。
+  const isUnsigned =
+    signature.status === WINDOWS_SIGNATURE_STATUS_NOT_SIGNED ||
+    signature.status === WINDOWS_SIGNATURE_STATUS_UNKNOWN_ERROR;
+  if (allowUnsigned && isUnsigned) {
+    return { failure: null, acceptedUnsigned: true, status: signature.status };
+  }
+
+  return {
+    failure: "Windows update requires a valid Authenticode signature",
+    acceptedUnsigned: false,
+    status: signature.status,
+  };
+}
