@@ -39,6 +39,9 @@ export function extractPrebuiltArchive({ archivePath, archiveExt, extractDir, cw
   mkdirSync(extractDir, { recursive: true });
   if (archiveExt === "zip") {
     if (process.platform === "win32") {
+      const cleanEnv = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => key.toLowerCase() !== "psmodulepath"),
+      );
       runCommand("powershell.exe", [
         "-NoProfile",
         "-NonInteractive",
@@ -46,7 +49,7 @@ export function extractPrebuiltArchive({ archivePath, archiveExt, extractDir, cw
         "Bypass",
         "-Command",
         `Expand-Archive -LiteralPath '${archivePath.replaceAll("'", "''")}' -DestinationPath '${extractDir.replaceAll("'", "''")}' -Force`,
-      ]);
+      ], { env: cleanEnv });
       return;
     }
 
