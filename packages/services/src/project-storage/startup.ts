@@ -17,6 +17,7 @@ import {
   markTasksStorageMigrated,
   markTasksStoragePrepared,
 } from "#src/session/tasksDatabase/prepared.js";
+import { reconcileForeignPiTasksFromTasksIndex } from "#src/project-storage/reconcile-foreign-pi-tasks.js";
 
 export type TasksStoragePhase =
   | "checking"
@@ -122,6 +123,11 @@ export async function prepareTasksIndexStorage(
       }
     }
     if (!preparationFailure && closeFailure) throw closeFailure;
+  }
+  try {
+    reconcileForeignPiTasksFromTasksIndex(path);
+  } catch {
+    /* Non-fatal: startup reconciliation must never block host startup. */
   }
   markTasksStoragePrepared(path);
   report("ready", migration);

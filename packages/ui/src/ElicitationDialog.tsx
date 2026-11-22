@@ -9,7 +9,15 @@ import {
 } from "react";
 import type { ZCodeElicitationQuestion, ZCodeElicitationRequest } from "@zcode/shared";
 import type { InteractionAutoResolution } from "@zcode/shared/zcode-protocol-v4";
-import { CheckIcon, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Info } from "lucide-react";
+import {
+  CheckIcon,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Info,
+  Square,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge.js";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
@@ -33,6 +41,10 @@ interface ElicitationDialogProps {
   ) => boolean | void | Promise<boolean | void>;
   initialFormDraft?: ElicitationFormDraft;
   onFormDraftChange?: (requestId: string, draft: ElicitationFormDraft) => void;
+  /** 会话处于运行中等待 QA 回复时暴露停止入口，避免底部输入区隐藏后用户误以为会话已结束。 */
+  canStop?: boolean;
+  stopping?: boolean;
+  onStop?: () => void;
 }
 
 export type ElicitationAutoResolutionSnoozeSource =
@@ -347,6 +359,9 @@ function ElicitationDialogContent({
   onFirstInteraction,
   initialFormDraft,
   onFormDraftChange,
+  canStop = false,
+  stopping = false,
+  onStop,
 }: ElicitationDialogProps) {
   const { intl } = useZCodeIntl();
   const questions = useMemo(() => normalizeElicitationQuestions(request), [request]);
@@ -765,14 +780,14 @@ function ElicitationDialogContent({
         onFocus={() => setActiveOptionIndex(index)}
         onKeyDown={handleOptionKeyDown}
         className={cn(
-          "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left outline-none transition-colors focus-visible:bg-hover",
+          "flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left outline-none transition-colors focus-visible:bg-hover",
           isSelected ? "bg-selected" : isActive ? "bg-hover" : "hover:bg-hover",
         )}
       >
         {question.multiSelect ? (
           <span
             className={cn(
-              "flex size-4 shrink-0 items-center justify-center rounded-sm border",
+              "mt-1 flex size-4 shrink-0 items-center justify-center rounded-sm border",
               isSelected
                 ? "border-brand bg-brand text-foreground-inverse"
                 : "border-border text-transparent",
@@ -783,7 +798,7 @@ function ElicitationDialogContent({
         ) : (
           <span
             className={cn(
-              "w-5 shrink-0 self-center text-ui-base font-medium",
+              "w-5 shrink-0 text-ui-base font-medium leading-normal tabular-nums",
               isSelected ? "text-foreground" : "text-foreground-subtlest",
             )}
           >
@@ -839,7 +854,7 @@ function ElicitationDialogContent({
           <span
             className={cn(
               // 与 textarea 首行使用相同行高并让出 1px 边框，避免顶部或整体居中造成错位。
-              "mt-px w-5 shrink-0 self-start text-ui-base font-medium leading-normal md:leading-relaxed",
+              "mt-px w-5 shrink-0 self-start text-ui-base font-medium leading-normal tabular-nums",
               isSelected ? "text-foreground" : "text-foreground-subtlest",
             )}
           >
@@ -931,6 +946,12 @@ function ElicitationDialogContent({
   const titleQuestion = isPlanApproval
     ? intl.formatMessage({ id: "chat.permission.switchMode.placeholder" })
     : (currentQuestion?.question ?? intl.formatMessage({ id: "chat.elicitation.title" }));
+  const normalizedTitleHeader = titleHeader?.trim() ?? "";
+  const normalizedTitleQuestion = titleQuestion.trim();
+  const showTitleHeader =
+    normalizedTitleHeader.length > 0 &&
+    normalizedTitleHeader !== normalizedTitleQuestion &&
+    !normalizedTitleQuestion.startsWith(normalizedTitleHeader);
   const shouldOfferQuestionCollapse = titleQuestion.length > 80 || titleQuestion.includes("\n");
   const questionCollapseLabel = intl.formatMessage({
     id: isQuestionExpanded
@@ -961,7 +982,17 @@ function ElicitationDialogContent({
     ) : null;
 
   return (
-    <div className="w-full shrink-0">
+    <div className="relative w-full shrink-0 pt-3">
+      {/* 顶部柔和背景遮罩 + 卡片背后护底，避免 sticky bottom dock 下滚动消息/用户气泡从上缘与圆角缝隙透出。 */}
+      <div
+        aria-hidden="true"
+        data-elicitation-top-mask="true"
+        className="pointer-events-none absolute -top-4 inset-x-0 h-10 bg-gradient-to-t from-background via-background/95 to-transparent"
+      />
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-6 bottom-0 bg-background"
+      />
       {/* Bugfix: 手机远控视口较短，长问题和多选项会把按钮顶出弹窗；卡片限高后让内容区内部滚动。 */}
       <div
         ref={cardRef}
@@ -979,21 +1010,22 @@ function ElicitationDialogContent({
               !isDialogExpanded ? "max-md:hidden" : undefined,
             )}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1 text-ui-base font-medium leading-5">
-                {titleHeader ? (
+            <div className="flex items-start justify-between gap-3 px-3 pt-0.5">
+              <div className="min-w-0 flex-1 text-ui-base font-medium leading-6">
+                {showTitleHeader ? (
                   <Badge
                     variant="outline"
-                    className="mr-2 max-w-40 align-baseline text-ui-base truncate"
+                    title={normalizedTitleHeader}
+                    className="mr-2 inline-flex h-auto min-h-6 max-w-44 items-center align-middle px-2.5 py-0.5 text-left text-ui-xs leading-snug"
                   >
-                    {titleHeader}
+                    <span className="truncate">{normalizedTitleHeader}</span>
                   </Badge>
                 ) : null}
                 {/* Bugfix: 问题不能只放在会截断的标题行；移动端没有 hover，必须在 tag 后直接完整可读。 */}
                 <span
                   title={titleQuestion}
                   className={cn(
-                    "whitespace-pre-wrap break-words leading-6 text-foreground",
+                    "whitespace-pre-wrap break-words align-middle leading-6 text-foreground",
                     shouldOfferQuestionCollapse && !isQuestionExpanded
                       ? "max-md:line-clamp-4"
                       : undefined,
@@ -1022,7 +1054,16 @@ function ElicitationDialogContent({
                   </Button>
                 ) : null}
               </div>
-              <div className="flex items-center gap-1 text-ui-base font-medium leading-tight text-foreground-subtlest">
+              <div className="flex shrink-0 items-center gap-1.5 text-ui-base font-medium leading-tight text-foreground-subtlest">
+                {canStop || stopping ? (
+                  <span
+                    data-testid="elicitation-running-indicator"
+                    className="mr-1 inline-flex items-center gap-1.5 rounded-full bg-brand/10 px-2 py-0.5 text-ui-xs font-medium text-brand"
+                  >
+                    <span className="size-1.5 animate-pulse rounded-full bg-brand" />
+                    {stopping ? "正在停止…" : "运行中 · 等待回复"}
+                  </span>
+                ) : null}
                 {countdownButton}
                 <Button
                   type="button"
@@ -1103,12 +1144,13 @@ function ElicitationDialogContent({
                 onClick={() => setIsDialogExpanded(true)}
                 className="flex min-w-0 flex-1 items-center gap-2 rounded-lg px-1 py-0.5 text-left text-ui-base font-medium text-foreground hover:bg-hover"
               >
-                {titleHeader ? (
+                {showTitleHeader ? (
                   <Badge
                     variant="outline"
-                    className="max-w-32 shrink-0 align-baseline text-ui-base truncate"
+                    title={normalizedTitleHeader}
+                    className="inline-flex h-auto min-h-5 max-w-32 shrink-0 items-center align-middle px-2 py-0.5 text-left text-ui-xs leading-snug"
                   >
-                    {titleHeader}
+                    <span className="truncate">{normalizedTitleHeader}</span>
                   </Badge>
                 ) : null}
                 <span className="min-w-0 flex-1 truncate">{titleQuestion}</span>
@@ -1145,6 +1187,20 @@ function ElicitationDialogContent({
               </span>
             </p>
             <div className="flex shrink-0 items-center gap-2">
+              {onStop && (canStop || stopping) ? (
+                <Button
+                  type="button"
+                  size="lg"
+                  variant="outline"
+                  disabled={stopping}
+                  onClick={onStop}
+                  data-testid="elicitation-stop-session"
+                  className="text-destructive hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Square className="mr-1.5 size-3 fill-current" />
+                  {stopping ? "停止中…" : "停止"}
+                </Button>
+              ) : null}
               <Button type="button" size="lg" variant="outline" onClick={dismiss}>
                 {intl.formatMessage({ id: "chat.elicitation.dismiss" })}
               </Button>
