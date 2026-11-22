@@ -86,6 +86,7 @@ const requiredDevPluginRuntimeBuilds = [
   { packageName: "@zcode/zcode-site-plugin", artifactPath: "zcode-site-plugin/dist/server.mjs" },
 ];
 const defaultBuildFilters = [
+  "acp-kernel",
   ...cliWorkspaceBuilds.map(({ packageName }) => packageName),
   ...requiredDevPluginRuntimeBuilds.map(({ packageName }) => packageName),
 ];

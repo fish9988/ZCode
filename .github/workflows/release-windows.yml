@@ -86,6 +86,10 @@ jobs:
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
+      - name: Build vendored acp-kernel
+        shell: pwsh
+        run: pnpm --filter acp-kernel build
+
       - name: Prepare runtime assets (agent bundle, Windows runtime host, native search)
         shell: pwsh
         env:
